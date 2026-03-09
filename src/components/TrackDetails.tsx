@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Track, Lap, TrackPoint } from '../types';
 import { TrackMap } from './TrackMap';
 import { formatTime, projectToTrackDistance } from '../utils/geo';
@@ -16,9 +16,22 @@ interface Props {
 
 export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     const MAX_SECTOR_GATES = 2;
+    const LAP_HISTORY_BATCH = 10;
     const [selectedLap, setSelectedLap] = useState<Lap | null>(null);
     const [mapMode, setMapMode] = useState<MapViewMode>('dt-absolute');
     const [isEditingSectors, setIsEditingSectors] = useState(false);
+    const [visibleLapCount, setVisibleLapCount] = useState(LAP_HISTORY_BATCH);
+
+    const reversedLaps = useMemo(() => [...(track.laps ?? [])].reverse(), [track.laps]);
+    const displayedLaps = useMemo(
+        () => reversedLaps.slice(0, visibleLapCount),
+        [reversedLaps, visibleLapCount],
+    );
+    const hasMoreLaps = visibleLapCount < reversedLaps.length;
+
+    useEffect(() => {
+        setVisibleLapCount(LAP_HISTORY_BATCH);
+    }, [track.id, track.laps?.length]);
 
     const sectorDistances = useMemo(() => {
         if (!track.sectors || track.sectors.length === 0 || track.totalDistance <= 0) {
@@ -180,9 +193,9 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
 
     const displayedPoints = selectedLap ? selectedLap.points : track.points;
     return (
-        <div className="relative h-screen flex flex-col bg-bg-color text-white overflow-hidden">
+        <div className="relative h-full flex flex-col bg-bg-color text-white overflow-hidden">
             {/* Header */}
-            <div className="relative z-30 p-6 flex justify-between items-center bg-linear-to-b from-black/80 to-transparent">
+            <div className="absolute inset-x-0 top-0 z-30 px-6 pb-3 pt-[calc(var(--safe-top)+0.5rem)] flex justify-between items-center bg-linear-to-b from-black/80 to-transparent">
                 <button 
                     onClick={onBack}
                     className="p-3 apex-pill hover:bg-white/20 transition-colors"
@@ -200,9 +213,9 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                 <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
             </div>
 
-            <div className="flex-1 overflow-y-auto pb-20">
+            <div className="relative z-20 flex-1 overflow-y-auto pb-20">
                 {/* Map Section */}
-                <div className="h-64 relative">
+                <div className="h-96 relative">
                     <TrackMap 
                         currentPos={null} 
                         referenceTrack={selectedLap ? null : track} 
@@ -271,13 +284,13 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                             )}
                         </div>
                         
-                        {!track.laps || track.laps.length === 0 ? (
+                        {reversedLaps.length === 0 ? (
                             <div className="apex-panel-muted p-8 rounded-3xl text-center text-text-secondary border-dashed">
                                 No detailed history available. Record new laps to see analysis.
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                {[...track.laps].reverse().map((lap, idx) => (
+                                {displayedLaps.map((lap, idx) => (
                                     <motion.div 
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
@@ -291,7 +304,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                         } flex justify-between items-center`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <span className="text-text-secondary font-sans text-xs tabular-nums">#{track.laps!.length - idx}</span>
+                                            <span className="text-text-secondary font-sans text-xs tabular-nums">#{reversedLaps.length - idx}</span>
                                             <div className="flex flex-col">
                                                 <span className={`font-sans font-bold tabular-nums ${lap.time === track.bestTime ? 'text-accent-green' : ''}`}>
                                                     {formatTime(lap.time)}
@@ -309,6 +322,14 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                         </div>
                                     </motion.div>
                                 ))}
+                                {hasMoreLaps && (
+                                    <button
+                                        onClick={() => setVisibleLapCount((count) => Math.min(count + LAP_HISTORY_BATCH, reversedLaps.length))}
+                                        className="w-full py-3 rounded-2xl apex-panel-muted hover:border-white/20 border border-white/10 text-xs font-bold uppercase tracking-widest text-text-secondary hover:text-white transition-colors"
+                                    >
+                                        More
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

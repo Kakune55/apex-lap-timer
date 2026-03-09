@@ -13,8 +13,8 @@ interface Props {
 
 export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateNew }: Props) {
     return (
-        <div className="p-3 sm:p-6 max-w-3xl mx-auto w-full">
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-5 sm:mb-8 pt-4 sm:pt-8">
+        <div className="p-3 sm:p-6 max-w-3xl mx-auto w-full h-full overflow-y-auto overscroll-y-contain">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-5 sm:mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Saved Tracks</h1>
                 <button
                     onClick={onCreateNew}

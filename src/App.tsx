@@ -243,7 +243,7 @@ export default function App() {
         typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === 'true';
 
     return (
-        <div className="min-h-screen bg-bg-color text-white selection:bg-white/20">
+        <div className="h-full bg-bg-color text-white selection:bg-white/20 overflow-hidden">
             <div className={`fixed bottom-6 right-24 z-40 flex items-center gap-2 rounded-2xl apex-glass px-3 py-2 text-xs shadow-xl transition-all duration-500 ${showSyncIndicator ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
                 <Cloud size={14} className="text-white/60" />
                 <SyncIcon size={14} className={`${syncAccentClass} ${syncStatus.state === 'syncing' ? 'animate-spin' : ''}`} />

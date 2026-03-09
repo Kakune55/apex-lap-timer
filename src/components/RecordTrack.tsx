@@ -98,15 +98,15 @@ export function RecordTrack({ onSave, onCancel }: Props) {
     };
 
     return (
-        <div className="relative h-screen flex flex-col bg-bg-color text-white overflow-hidden">
+        <div className="relative h-full flex flex-col bg-bg-color text-white overflow-hidden">
             {/* Map Background */}
             <div className="absolute inset-0 z-0">
                 <TrackMap currentPos={gps} recordedPoints={points} startGate={startGate} offsetY={150} />
                 <div className="absolute inset-0 bg-linear-to-t from-bg-color/60 via-transparent to-transparent z-10 pointer-events-none"></div>
             </div>
 
-            <div className="relative z-20 flex flex-col h-full p-6 max-w-md mx-auto w-full">
-                <div className="flex justify-between items-center mb-8 pt-4">
+            <div className="relative z-20 flex flex-col h-full px-6 pb-6 pt-0 max-w-md mx-auto w-full">
+                <div className="flex justify-between items-center mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
                     <h2 className="text-2xl font-bold apex-pill px-4 py-2">Record Track</h2>
                     <button onClick={onCancel} className="text-text-secondary hover:text-white font-medium apex-pill px-4 py-2">Cancel</button>
                 </div>

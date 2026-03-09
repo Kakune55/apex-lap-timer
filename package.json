@@ -4,7 +4,7 @@
 	"scripts": {
 		"dev": "npm run build:frontend && wrangler dev",
 		"dev:frontend": "vite --port=3000 --host=0.0.0.0",
-		"build:frontend": "vite build",
+		"build:frontend": "vite build && node scripts/prepare-pwa.mjs",
 		"deploy": "npm run build:frontend && wrangler deploy --minify",
 		"cf-typegen": "wrangler types --env-interface CloudflareBindings"
 	},

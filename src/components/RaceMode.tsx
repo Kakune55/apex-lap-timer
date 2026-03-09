@@ -374,7 +374,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     };
 
     return (
-        <div className="relative h-screen flex flex-col bg-bg-color text-white overflow-hidden">
+        <div className="relative h-full flex flex-col bg-bg-color text-white overflow-hidden">
             {/* Map Background */}
             <div className="absolute inset-0 z-0">
                 <TrackMap 
@@ -388,7 +388,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             </div>
 
             {/* Header */}
-            <div className="relative z-20 p-6 flex items-center justify-between pt-8">
+            <div className="relative z-20 px-6 pb-4 pt-[calc(var(--safe-top)+0.5rem)] flex items-center justify-between">
                 <button onClick={onBack} className="p-3 apex-pill hover:bg-white/10 transition-colors">
                     <ChevronLeft size={24} />
                 </button>
