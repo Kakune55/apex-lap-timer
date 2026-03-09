@@ -66,14 +66,16 @@ Sync API endpoints:
 
 ### Optional: Protect API with HTTP Basic Auth
 
-Set credentials as Worker secrets:
+Set credentials as Worker secrets (production):
 
 ```txt
 npx wrangler secret put BASIC_AUTH_USERNAME
 npx wrangler secret put BASIC_AUTH_PASSWORD
 ```
 
-After setting these, all `/api/*` requests require `Authorization: Basic ...`.
+For local `wrangler dev`, you can put the same keys in `.dev.vars` (see `.dev.vars.example`).
+
+When both values are configured, all `/api/*` requests require `Authorization: Basic ...`.
 
 ## Types
 

@@ -50,14 +50,10 @@ app.use("/api/*", async (c, next) => {
   const expectedUsername = c.env.BASIC_AUTH_USERNAME;
   const expectedPassword = c.env.BASIC_AUTH_PASSWORD;
 
+  // Keep local/dev experience smooth: auth is enforced only after credentials are configured.
   if (!expectedUsername || !expectedPassword) {
-    return c.json(
-      {
-        ok: false,
-        error: "Basic auth not configured. Set BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD.",
-      },
-      503,
-    );
+    await next();
+    return;
   }
 
   const credentials = parseBasicAuth(c.req.header("authorization"));

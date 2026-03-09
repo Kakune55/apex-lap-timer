@@ -34,6 +34,27 @@ function MapUpdater({ center, offsetY = 0 }: { center: [number, number], offsetY
     return null;
 }
 
+function MapAutoFocus({ points }: { points: [number, number][] }) {
+    const map = useMap();
+
+    useEffect(() => {
+        if (points.length === 0) return;
+
+        if (points.length === 1) {
+            map.setView(points[0], Math.max(map.getZoom(), 17), { animate: true });
+            return;
+        }
+
+        map.fitBounds(points, {
+            animate: true,
+            padding: [24, 24],
+            maxZoom: 18,
+        });
+    }, [map, points]);
+
+    return null;
+}
+
 interface Props {
     currentPos: { lat: number, lon: number } | null;
     recordedPoints?: TrackPoint[];
@@ -59,6 +80,15 @@ export function TrackMap({
     // Group recorded points into segments by color based on mode
     const segments = getColoredSegments(recordedPoints, mode);
 
+    const autoFocusPoints: [number, number][] = [
+        ...recordedPoints.map((p) => [p.lat, p.lon] as [number, number]),
+        ...referencePositions,
+        ...(startGate ? [[startGate.lat, startGate.lon] as [number, number]] : []),
+        ...(referenceTrack?.startGate ? [[referenceTrack.startGate.lat, referenceTrack.startGate.lon] as [number, number]] : []),
+        ...(referenceTrack?.finishGate ? [[referenceTrack.finishGate.lat, referenceTrack.finishGate.lon] as [number, number]] : []),
+        ...(referenceTrack?.sectors?.map((sector) => [sector.lat, sector.lon] as [number, number]) ?? []),
+    ];
+
     const renderGate = (gate: Gate, color: string) => {
         const R = 6371000;
         // Convert heading to radians and calculate offsets
@@ -80,6 +110,7 @@ export function TrackMap({
                 url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
             {currentPos && <MapUpdater center={center} offsetY={offsetY} />}
+            {!currentPos && autoFocusPoints.length > 0 && <MapAutoFocus points={autoFocusPoints} />}
 
             {/* Reference Track */}
             {referencePositions.length > 0 && (
