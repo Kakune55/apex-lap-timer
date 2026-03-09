@@ -95,3 +95,5 @@ function interpolateColor(color1: string, color2: string, factor: number): strin
 
     return `rgb(${r}, ${g}, ${b})`;
 }
+
+

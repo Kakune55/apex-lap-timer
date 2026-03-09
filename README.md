@@ -11,6 +11,13 @@ Run Cloudflare Worker locally (builds frontend into `public` first):
 npm run dev
 ```
 
+### Mobile Safari GPS Notes
+
+- iOS Safari only allows geolocation on secure origins (`https://`) or `localhost`.
+- Accessing your dev server from phone via `http://<LAN-IP>:<port>` can show no GPS signal even after allowing permission.
+- Use a secure URL (for example your deployed `*.workers.dev` domain) when testing on iPhone.
+- On iPhone, confirm `Settings > Safari > Location` is set to `Allow`.
+
 ## Deploy
 
 ```txt
@@ -56,6 +63,17 @@ Sync API endpoints:
 
 - `POST /api/sync`
 - `GET /api/tracks?since=<timestamp>`
+
+### Optional: Protect API with HTTP Basic Auth
+
+Set credentials as Worker secrets:
+
+```txt
+npx wrangler secret put BASIC_AUTH_USERNAME
+npx wrangler secret put BASIC_AUTH_PASSWORD
+```
+
+After setting these, all `/api/*` requests require `Authorization: Basic ...`.
 
 ## Types
 

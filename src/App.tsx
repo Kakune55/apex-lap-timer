@@ -5,7 +5,7 @@ import { RecordTrack } from './components/RecordTrack';
 import { RaceMode } from './components/RaceMode';
 import { TrackDetails } from './components/TrackDetails';
 import { useGPS } from './hooks/useGPS';
-import { Bug, Plus, Minus } from 'lucide-react';
+import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
 
 function DevTools() {
@@ -17,7 +17,7 @@ function DevTools() {
             <button
                 onClick={() => setIsOpen(true)}
                 className={`fixed bottom-6 right-6 p-4 rounded-full shadow-2xl z-50 transition-colors ${
-                    simMode ? 'bg-[var(--accent-green)] text-black' : 'bg-white/10 text-white hover:bg-white/20 backdrop-blur-md'
+                    simMode ? 'bg-accent-green text-black' : 'bg-white/10 text-white hover:bg-white/20 backdrop-blur-md'
                 }`}
             >
                 <Bug size={24} />
@@ -28,14 +28,14 @@ function DevTools() {
     return (
         <div className="fixed bottom-6 right-6 bg-black/90 backdrop-blur-xl border border-white/10 p-5 rounded-3xl shadow-2xl z-50 w-64">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-sm uppercase tracking-widest text-[var(--text-secondary)]">Dev Tools</h3>
+                <h3 className="font-bold text-sm uppercase tracking-widest text-text-secondary">Dev Tools</h3>
                 <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white">✕</button>
             </div>
 
             <button
                 onClick={toggleSimulation}
                 className={`w-full py-3 rounded-xl font-bold mb-4 transition-colors ${
-                    simMode ? 'bg-[var(--accent-green)] text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                    simMode ? 'bg-accent-green text-black' : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
             >
                 {simMode ? 'Disable Simulator' : 'Enable Simulator'}
@@ -43,7 +43,7 @@ function DevTools() {
 
             {simMode && (
                 <div className="bg-white/5 p-4 rounded-2xl">
-                    <div className="text-xs font-bold text-[var(--text-secondary)] mb-2 uppercase tracking-widest text-center">Sim Speed</div>
+                    <div className="text-xs font-bold text-text-secondary mb-2 uppercase tracking-widest text-center">Sim Speed</div>
                     <div className="flex items-center justify-between">
                         <button
                             onClick={() => setSimulationSpeed(simSpeed - 10)}
@@ -78,6 +78,8 @@ export default function App() {
 
     const tracksRef = useRef<Track[]>([]);
     const syncRef = useRef<ReturnType<typeof createCloudSync> | null>(null);
+    const hideSyncTimeoutRef = useRef<number | null>(null);
+    const [showSyncIndicator, setShowSyncIndicator] = useState(false);
 
     const normalizeTracks = (incoming: Track[]) => {
         const now = Date.now();
@@ -124,8 +126,35 @@ export default function App() {
 
         return () => {
             syncManager.stop();
+            if (hideSyncTimeoutRef.current !== null) {
+                clearTimeout(hideSyncTimeoutRef.current);
+                hideSyncTimeoutRef.current = null;
+            }
         };
     }, []);
+
+    useEffect(() => {
+        if (hideSyncTimeoutRef.current !== null) {
+            clearTimeout(hideSyncTimeoutRef.current);
+            hideSyncTimeoutRef.current = null;
+        }
+
+        if (syncStatus.state !== 'idle') {
+            setShowSyncIndicator(true);
+            return;
+        }
+
+        hideSyncTimeoutRef.current = window.setTimeout(() => {
+            setShowSyncIndicator(false);
+        }, 5000);
+
+        return () => {
+            if (hideSyncTimeoutRef.current !== null) {
+                clearTimeout(hideSyncTimeoutRef.current);
+                hideSyncTimeoutRef.current = null;
+            }
+        };
+    }, [syncStatus.state]);
 
     const handleSaveTrack = (track: Track) => {
         const newTrack = { ...track, updatedAt: Date.now() };
@@ -159,20 +188,70 @@ export default function App() {
         }
     };
 
+    const formatSyncTime = (timestamp: number | null) => {
+        if (!timestamp) {
+            return 'never';
+        }
+
+        const deltaMs = Date.now() - timestamp;
+        if (deltaMs < 60000) {
+            return 'just now';
+        }
+
+        const minutes = Math.floor(deltaMs / 60000);
+        if (minutes < 60) {
+            return `${minutes}m ago`;
+        }
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) {
+            return `${hours}h ago`;
+        }
+
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+    };
+
     const syncText =
         syncStatus.state === 'syncing'
-            ? 'Syncing cloud...'
+            ? 'Syncing to cloud'
             : syncStatus.state === 'offline'
-            ? 'Offline mode'
+            ? 'Offline mode active'
             : syncStatus.state === 'error'
-            ? 'Sync failed, retrying'
-            : 'Cloud synced';
+            ? 'Sync paused, retry queued'
+            : 'Cloud up to date';
+
+    const SyncIcon =
+        syncStatus.state === 'syncing'
+            ? RefreshCw
+            : syncStatus.state === 'offline'
+            ? CloudOff
+            : syncStatus.state === 'error'
+            ? AlertTriangle
+            : CheckCircle2;
+
+    const syncAccentClass =
+        syncStatus.state === 'syncing'
+            ? 'text-cyan-300'
+            : syncStatus.state === 'offline'
+            ? 'text-amber-300'
+            : syncStatus.state === 'error'
+            ? 'text-rose-300'
+            : 'text-emerald-300';
+
+    const debugEnabled =
+        typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === 'true';
 
     return (
-        <div className="min-h-screen bg-[var(--bg-color)] text-white selection:bg-white/20">
-            <div className="fixed top-4 left-4 z-50 bg-black/60 backdrop-blur-md border border-white/10 rounded-full px-3 py-1 text-xs font-medium">
-                {syncText}
-                {syncStatus.pending > 0 ? ` (${syncStatus.pending} queued)` : ''}
+        <div className="min-h-screen bg-bg-color text-white selection:bg-white/20">
+            <div className={`fixed bottom-6 right-24 z-40 flex items-center gap-2 rounded-2xl border border-white/15 bg-black/65 px-3 py-2 text-xs backdrop-blur-md shadow-xl transition-all duration-500 ${showSyncIndicator ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+                <Cloud size={14} className="text-white/60" />
+                <SyncIcon size={14} className={`${syncAccentClass} ${syncStatus.state === 'syncing' ? 'animate-spin' : ''}`} />
+                <span className="font-medium text-white/90">{syncText}</span>
+                {syncStatus.pending > 0 ? (
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/80">{syncStatus.pending} queued</span>
+                ) : null}
+                <span className="text-[10px] text-white/50">{formatSyncTime(syncStatus.lastSyncAt)}</span>
             </div>
             {view === 'home' && (
                 <TrackList
@@ -209,7 +288,8 @@ export default function App() {
                     onUpdateTrack={handleUpdateTrack}
                 />
             )}
-            <DevTools />
+            {debugEnabled ? <DevTools /> : null}
         </div>
     );
 }
+

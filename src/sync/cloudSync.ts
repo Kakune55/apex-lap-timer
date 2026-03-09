@@ -125,6 +125,8 @@ function retryDelay(attempts: number) {
   return Math.min(60000, 1000 * 2 ** Math.max(0, attempts));
 }
 
+const STALE_PULL_MS = 120000;
+
 export function createCloudSync(options: {
   getTracks: () => Track[];
   setTracks: (tracks: Track[]) => void;
@@ -132,6 +134,48 @@ export function createCloudSync(options: {
 }) {
   let timer: number | null = null;
   let syncing = false;
+
+  const canBackgroundSync = () =>
+    navigator.onLine &&
+    typeof document !== "undefined" &&
+    document.visibilityState === "visible";
+
+  const scheduleNextSync = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+
+    if (!canBackgroundSync()) {
+      return;
+    }
+
+    const nowTs = now();
+    const outbox = getOutbox();
+    const nextRetryAt = outbox.reduce<number | null>((next, item) => {
+      if (item.nextAttemptAt <= nowTs) {
+        return nowTs;
+      }
+
+      if (next === null || item.nextAttemptAt < next) {
+        return item.nextAttemptAt;
+      }
+
+      return next;
+    }, null);
+
+    const nextStalePullAt = getLastSyncAt() + STALE_PULL_MS;
+    let nextAt = nextRetryAt;
+
+    if (!nextAt || nextStalePullAt < nextAt) {
+      nextAt = nextStalePullAt;
+    }
+
+    const delay = Math.max(1000, (nextAt ?? nowTs + STALE_PULL_MS) - nowTs);
+    timer = window.setTimeout(() => {
+      void syncNow();
+    }, delay);
+  };
 
   const emitStatus = (partial: Partial<SyncStatus>) => {
     const currentPending = getOutbox().length;
@@ -183,6 +227,7 @@ export function createCloudSync(options: {
 
     if (!navigator.onLine) {
       emitStatus({ state: "offline" });
+      scheduleNextSync();
       return;
     }
 
@@ -190,6 +235,7 @@ export function createCloudSync(options: {
     emitStatus({ state: "syncing", error: null });
 
     try {
+      const syncStartedAt = now();
       const before = getOutbox();
       const due = before.filter((item) => item.nextAttemptAt <= now());
 
@@ -220,24 +266,30 @@ export function createCloudSync(options: {
         setOutbox(before.filter((item) => !ackSet.has(item.opId)));
       }
 
-      const since = getLastSyncAt();
-      const pullResponse = await fetch(`/api/tracks?since=${since}`);
-      if (!pullResponse.ok) {
-        throw new Error(`sync pull failed: ${pullResponse.status}`);
+      const lastSyncAt = getLastSyncAt();
+      const shouldPull = due.length > 0 || syncStartedAt - lastSyncAt >= STALE_PULL_MS;
+
+      if (shouldPull) {
+        const pullResponse = await fetch(`/api/tracks?since=${lastSyncAt}`);
+        if (!pullResponse.ok) {
+          throw new Error(`sync pull failed: ${pullResponse.status}`);
+        }
+
+        const pullPayload = (await pullResponse.json()) as {
+          tracks?: RemoteTrackRecord[];
+          serverTime?: number;
+        };
+
+        const merged = mergeTracks(options.getTracks(), pullPayload.tracks ?? []);
+        options.setTracks(merged);
+        localStorage.setItem(TRACKS_KEY, JSON.stringify(merged));
+
+        const syncedAt = pullPayload.serverTime ?? now();
+        setLastSyncAt(syncedAt);
+        emitStatus({ state: "idle", lastSyncAt: syncedAt });
+      } else {
+        emitStatus({ state: "idle", lastSyncAt: lastSyncAt || null });
       }
-
-      const pullPayload = (await pullResponse.json()) as {
-        tracks?: RemoteTrackRecord[];
-        serverTime?: number;
-      };
-
-      const merged = mergeTracks(options.getTracks(), pullPayload.tracks ?? []);
-      options.setTracks(merged);
-      localStorage.setItem(TRACKS_KEY, JSON.stringify(merged));
-
-      const syncedAt = pullPayload.serverTime ?? now();
-      setLastSyncAt(syncedAt);
-      emitStatus({ state: "idle", lastSyncAt: syncedAt });
     } catch (error) {
       const message = error instanceof Error ? error.message : "sync failed";
       const outbox = getOutbox();
@@ -257,6 +309,7 @@ export function createCloudSync(options: {
       emitStatus({ state: "error", error: message });
     } finally {
       syncing = false;
+      scheduleNextSync();
     }
   };
 
@@ -264,28 +317,34 @@ export function createCloudSync(options: {
     void syncNow();
   };
 
+  const handleFocus = () => {
+    void syncNow();
+  };
+
   const handleVisibility = () => {
     if (document.visibilityState === "visible") {
       void syncNow();
+    } else {
+      scheduleNextSync();
     }
   };
 
   const start = () => {
     emitStatus({ state: navigator.onLine ? "idle" : "offline" });
     void syncNow();
-    timer = window.setInterval(() => {
-      void syncNow();
-    }, 15000);
     window.addEventListener("online", handleOnline);
+    window.addEventListener("focus", handleFocus);
     window.addEventListener("visibilitychange", handleVisibility);
+    scheduleNextSync();
   };
 
   const stop = () => {
     if (timer !== null) {
-      clearInterval(timer);
+      clearTimeout(timer);
       timer = null;
     }
     window.removeEventListener("online", handleOnline);
+    window.removeEventListener("focus", handleFocus);
     window.removeEventListener("visibilitychange", handleVisibility);
   };
 
@@ -297,3 +356,5 @@ export function createCloudSync(options: {
     queueDelete,
   };
 }
+
+

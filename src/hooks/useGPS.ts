@@ -22,6 +22,25 @@ let simInterval: number | null = null;
 let watchId: number | null = null;
 let currentAngle = 0; // Keep track of angle so speed changes don't jump position
 
+const hasSecureLocationContext = () => {
+    const host = window.location.hostname;
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    return window.isSecureContext || isLocalhost;
+};
+
+const getGeoErrorMessage = (err: GeolocationPositionError) => {
+    if (err.code === err.PERMISSION_DENIED) {
+        return 'Location permission denied. In Safari: Settings > Safari > Location > Allow, then reload.';
+    }
+    if (err.code === err.POSITION_UNAVAILABLE) {
+        return 'GPS position unavailable. Move to open sky and ensure Location Services is enabled.';
+    }
+    if (err.code === err.TIMEOUT) {
+        return 'GPS timeout. Please keep the page active and tap Retry GPS.';
+    }
+    return err.message || 'Failed to get GPS location.';
+};
+
 const startSimulation = () => {
     if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
@@ -71,10 +90,22 @@ const stopSimulation = () => {
     }
 };
 
+const stopRealGPS = () => {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+};
+
 const startRealGPS = () => {
     if (isSimulating) return;
     if (!('geolocation' in navigator)) {
         globalError = 'Geolocation is not supported by your browser';
+        notify();
+        return;
+    }
+    if (!hasSecureLocationContext()) {
+        globalError = 'Safari requires HTTPS for GPS on mobile devices. Open this app via https:// or localhost.';
         notify();
         return;
     }
@@ -94,7 +125,7 @@ const startRealGPS = () => {
             notify();
         },
         (err) => {
-            globalError = err.message;
+            globalError = getGeoErrorMessage(err);
             notify();
         },
         {
@@ -103,6 +134,51 @@ const startRealGPS = () => {
             timeout: 5000,
         }
     );
+};
+
+export const requestGPSPermission = () => {
+    if (!('geolocation' in navigator)) {
+        globalError = 'Geolocation is not supported by your browser';
+        notify();
+        return;
+    }
+    if (!hasSecureLocationContext()) {
+        globalError = 'Safari requires HTTPS for GPS on mobile devices. Open this app via https:// or localhost.';
+        notify();
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            globalData = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude,
+                speed: position.coords.speed || 0,
+                heading: position.coords.heading || 0,
+                accuracy: position.coords.accuracy,
+                timestamp: position.timestamp,
+            };
+            globalError = null;
+            stopRealGPS();
+            startRealGPS();
+            notify();
+        },
+        (err) => {
+            globalError = getGeoErrorMessage(err);
+            notify();
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 10000,
+        },
+    );
+};
+
+export const retryGPS = () => {
+    stopRealGPS();
+    startRealGPS();
+    notify();
 };
 
 export const toggleSimulation = () => {
@@ -154,7 +230,11 @@ export function useGPS() {
         error: state.error,
         simMode: state.simMode,
         simSpeed: state.simSpeed,
+        requestPermission: requestGPSPermission,
+        retryGPS,
         toggleSimulation,
         setSimulationSpeed
     };
 }
+
+

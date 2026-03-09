@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
 import { Track, TrackPoint, Lap } from '../types';
-import { getDistance, checkGateCrossing, formatTime, formatDelta, getExpectedTime } from '../utils/geo';
+import { getDistance, checkGateCrossing, formatTime, formatDelta, getExpectedTime, projectToTrackDistance } from '../utils/geo';
 import { ChevronLeft } from 'lucide-react';
 import { TrackMap } from './TrackMap';
 import { MapViewMode } from '../utils/map';
@@ -29,6 +29,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const [showSprintModal, setShowSprintModal] = useState(false);
     const [sprintTime, setSprintTime] = useState(0);
     const currentLapPointsRef = useRef<TrackPoint[]>([]);
+    const projectedDistanceRef = useRef(0);
 
     const prevGpsRef = useRef(gps);
     const requestRef = useRef<number>(0);
@@ -62,6 +63,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 setRaceState('racing');
                 setStartTime(curr.timestamp);
                 setCurrentDistance(0);
+                projectedDistanceRef.current = 0;
                 const firstPoint = {
                     lat: curr.lat,
                     lon: curr.lon,
@@ -74,9 +76,30 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 setRecordedPoints([firstPoint]);
             }
         } else if (raceState === 'racing') {
-            // Update distance
             const dist = getDistance(prev.lat, prev.lon, curr.lat, curr.lon);
-            const newDist = currentDistance + dist;
+            const gpsAccuracy = curr.accuracy || 12;
+            const prevProjectedDistance = projectedDistanceRef.current;
+
+            const projection = projectToTrackDistance(track.points, curr.lat, curr.lon, {
+                minDistance: Math.max(0, prevProjectedDistance - 12),
+                maxDistance: prevProjectedDistance + Math.max(35, dist * 3 + gpsAccuracy * 1.5),
+                maxLateralError: Math.max(12, Math.min(42, gpsAccuracy * 1.8)),
+                targetDistance: prevProjectedDistance + dist,
+                continuityWeight: 0.08,
+            });
+
+            let newDist: number;
+            if (projection) {
+                const maxAdvance = Math.max(22, dist * 3 + gpsAccuracy * 1.8);
+                const projected = Math.max(prevProjectedDistance, projection.distance);
+                newDist = Math.min(projected, prevProjectedDistance + maxAdvance);
+            } else {
+                // Fallback to dead reckoning when projection is temporarily unavailable.
+                const maxFallbackStep = Math.max(8, gpsAccuracy * 1.2);
+                newDist = prevProjectedDistance + Math.min(dist, maxFallbackStep);
+            }
+
+            projectedDistanceRef.current = newDist;
             setCurrentDistance(newDist);
 
             // Calculate Delta based on GPS timestamp for accuracy, not Date.now()
@@ -89,7 +112,8 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             }
 
             // Record points for potential update
-            if (dist > 2) {
+            const jumpThreshold = Math.max(60, gpsAccuracy * 4);
+            if (dist > 2 && dist < jumpThreshold) {
                 const newPoint = {
                     lat: curr.lat,
                     lon: curr.lon,
@@ -140,6 +164,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     // Reset for next lap
                     setStartTime(curr.timestamp);
                     setCurrentDistance(0);
+                    projectedDistanceRef.current = 0;
                     const firstPoint = {
                         lat: curr.lat,
                         lon: curr.lon,
@@ -163,7 +188,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         }
 
         prevGpsRef.current = curr;
-    }, [gps, raceState, track, currentDistance, startTime, autoUpdate, onUpdateTrack]);
+    }, [gps, raceState, track, startTime, autoUpdate, onUpdateTrack]);
 
     const speedKmh = Math.round((gps?.speed || 0) * 3.6);
     const isFaster = deltaTime <= 0;
@@ -175,7 +200,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     };
 
     return (
-        <div className="relative h-screen flex flex-col bg-[var(--bg-color)] text-white overflow-hidden">
+        <div className="relative h-screen flex flex-col bg-bg-color text-white overflow-hidden">
             {/* Map Background */}
             <div className="absolute inset-0 z-0">
                 <TrackMap 
@@ -185,7 +210,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     offsetY={150} 
                     mode={mapMode}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-color)]/60 via-transparent to-transparent z-10 pointer-events-none"></div>
+                <div className="absolute inset-0 bg-linear-to-t from-bg-color/60 via-transparent to-transparent z-10 pointer-events-none"></div>
             </div>
 
             {/* Header */}
@@ -194,7 +219,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     <ChevronLeft size={24} />
                 </button>
                 <div className="text-center bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
-                    <h2 className="text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)]">{track.name}</h2>
+                    <h2 className="text-sm font-bold uppercase tracking-widest text-text-secondary">{track.name}</h2>
                     <div className="text-xs text-white mt-0.5 font-medium">
                         {raceState === 'waiting' ? 'APPROACH START LINE' : raceState === 'finished' ? 'FINISHED' : 'RACING'}
                     </div>
@@ -209,31 +234,31 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     <div className="text-[80px] sm:text-[110px] leading-none font-bold font-sans tabular-nums tracking-tighter drop-shadow-2xl">
                         {speedKmh}
                     </div>
-                    <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] mt-0 drop-shadow-md">KM/H</div>
+                    <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-text-secondary mt-0 drop-shadow-md">KM/H</div>
                 </div>
 
                 {/* Time & Delta Grid */}
                 <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-2 sm:mb-3">
                     {/* Time */}
-                    <div className="bg-[var(--card-bg)]/50 backdrop-blur-sm rounded-2xl p-3 sm:p-5 border border-white/10 shadow-2xl relative overflow-hidden flex flex-col justify-center">
-                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)] mb-0.5 sm:mb-1">Time</div>
+                    <div className="bg-card-bg/50 backdrop-blur-sm rounded-2xl p-3 sm:p-5 border border-white/10 shadow-2xl relative overflow-hidden flex flex-col justify-center">
+                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Time</div>
                         <div className="text-2xl sm:text-4xl font-sans font-bold tabular-nums tracking-tighter">
                             {formatTime(currentLapTime)}
                         </div>
-                        <div className="text-[13px] sm:text-[15px] text-[var(--text-secondary)] mt-0.5 sm:mt-1 font-sans font-semibold tabular-nums">
+                        <div className="text-[13px] sm:text-[15px] text-text-secondary mt-0.5 sm:mt-1 font-sans font-semibold tabular-nums">
                             Best: {formatTime(track.bestTime)}
                         </div>
                     </div>
 
                     {/* Delta */}
                     <div className={`rounded-2xl p-3 sm:p-5 border shadow-2xl transition-colors duration-300 backdrop-blur-sm flex flex-col justify-center ${
-                        raceState === 'waiting' ? 'bg-[var(--card-bg)]/50 border-white/10' :
-                        isFaster ? 'bg-[var(--accent-green)]/20 border-[var(--accent-green)]/50' : 'bg-[var(--accent-red)]/20 border-[var(--accent-red)]/50'
+                        raceState === 'waiting' ? 'bg-card-bg/50 border-white/10' :
+                        isFaster ? 'bg-accent-green/20 border-accent-green/50' : 'bg-accent-red/20 border-accent-red/50'
                     }`}>
-                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)] mb-0.5 sm:mb-1">Delta</div>
+                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Delta</div>
                         <div className={`text-2xl sm:text-4xl font-sans font-bold tabular-nums tracking-tighter ${
-                            raceState === 'waiting' ? 'text-[var(--text-secondary)]' :
-                            isFaster ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'
+                            raceState === 'waiting' ? 'text-text-secondary' :
+                            isFaster ? 'text-accent-green' : 'text-accent-red'
                         }`}>
                             {raceState === 'waiting' ? '+0.00' : formatDelta(deltaTime)}
                         </div>
@@ -244,8 +269,8 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 {track.type === 'circuit' && laps.length > 0 && (
                     <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-2 sm:p-3 border border-white/5">
                         <div className="flex justify-between items-center mb-1.5">
-                            <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)]">Previous Laps</div>
-                            <label className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-[var(--text-secondary)] cursor-pointer hover:text-white transition-colors">
+                            <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary">Previous Laps</div>
+                            <label className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-text-secondary cursor-pointer hover:text-white transition-colors">
                                 <input
                                     type="checkbox"
                                     checked={autoUpdate}
@@ -253,7 +278,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                         setAutoUpdate(e.target.checked);
                                         onUpdateTrack({ ...track, autoUpdateRecord: e.target.checked });
                                     }}
-                                    className="accent-[var(--accent-green)] w-3 h-3 rounded"
+                                    className="accent-accent-green w-3 h-3 rounded"
                                 />
                                 Auto-Update
                             </label>
@@ -264,9 +289,9 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                 const isLapFaster = lapDelta <= 0;
                                 return (
                                     <div key={i} className="flex justify-between items-center text-xs sm:text-sm font-sans tabular-nums bg-white/5 p-1.5 sm:p-2 rounded-xl">
-                                        <span className="text-[var(--text-secondary)] font-medium text-[10px] sm:text-xs">Lap {laps.length - Math.min(laps.length, 3) + i + 1}</span>
+                                        <span className="text-text-secondary font-medium text-[10px] sm:text-xs">Lap {laps.length - Math.min(laps.length, 3) + i + 1}</span>
                                         <div className="flex items-center gap-2 sm:gap-3">
-                                            <span className={`font-bold ${isLapFaster ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'}`}>
+                                            <span className={`font-bold ${isLapFaster ? 'text-accent-green' : 'text-accent-red'}`}>
                                                 {formatDelta(lapDelta)}
                                             </span>
                                             <span className="font-bold text-white/90">{formatTime(lap)}</span>
@@ -282,17 +307,17 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             {/* Sprint Finish Modal */}
             {showSprintModal && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
-                    <div className="bg-[var(--card-bg)] border border-white/10 p-8 rounded-3xl max-w-sm w-full shadow-2xl text-center">
+                    <div className="bg-card-bg border border-white/10 p-8 rounded-3xl max-w-sm w-full shadow-2xl text-center">
                         <h3 className="text-2xl font-bold mb-2">Sprint Finished!</h3>
-                        <div className="text-5xl font-sans font-bold mb-6 text-[var(--accent-green)] tabular-nums">
+                        <div className="text-5xl font-sans font-bold mb-6 text-accent-green tabular-nums">
                             {formatTime(sprintTime)}
                         </div>
                         {sprintTime < track.bestTime ? (
                             <>
-                                <div className="text-[var(--accent-green)] font-bold mb-6 uppercase tracking-widest text-sm">
+                                <div className="text-accent-green font-bold mb-6 uppercase tracking-widest text-sm">
                                     New Personal Best!
                                 </div>
-                                <p className="text-[var(--text-secondary)] mb-8 text-sm">
+                                <p className="text-text-secondary mb-8 text-sm">
                                     Would you like to update the reference track with this new record?
                                 </p>
                                 <div className="flex gap-4">
@@ -330,7 +355,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                             </>
                         ) : (
                             <>
-                                <div className="text-[var(--text-secondary)] font-bold mb-6 uppercase tracking-widest text-sm">
+                                <div className="text-text-secondary font-bold mb-6 uppercase tracking-widest text-sm">
                                     Slower than Best ({formatTime(track.bestTime)})
                                 </div>
                                 <button
@@ -355,3 +380,4 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         </div>
     );
 }
+

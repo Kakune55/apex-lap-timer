@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Lap } from '../types';
 import { 
     AreaChart, 
@@ -19,6 +19,18 @@ interface Props {
 }
 
 export function LapAnalysisCharts({ lap }: Props) {
+    const [isCompact, setIsCompact] = useState(false);
+
+    useEffect(() => {
+        const updateCompact = () => {
+            setIsCompact(window.innerWidth < 420);
+        };
+
+        updateCompact();
+        window.addEventListener('resize', updateCompact);
+        return () => window.removeEventListener('resize', updateCompact);
+    }, []);
+
     const chartData = useMemo(() => {
         if (!lap.points || lap.points.length < 3) return [];
 
@@ -77,23 +89,30 @@ export function LapAnalysisCharts({ lap }: Props) {
 
     if (chartData.length === 0) return null;
 
+    const chartMargin = isCompact
+        ? { top: 6, right: 6, left: -16, bottom: 0 }
+        : { top: 8, right: 8, left: 0, bottom: 0 };
+
+    const yAxisWidth = isCompact ? 24 : 36;
+    const xTickGap = isCompact ? 28 : 50;
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
-                <div className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest flex items-center gap-2">
+                <div className="text-[10px] font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
                     <Maximize2 size={12} /> Use slider below to zoom
                 </div>
             </div>
 
             {/* Speed Chart */}
-            <div className="bg-[var(--card-bg)] p-4 rounded-3xl border border-white/5">
-                <div className="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold uppercase tracking-widest mb-4">
-                    <Activity size={14} className="text-[var(--accent-green)]" />
+            <div className="bg-card-bg p-3 sm:p-4 rounded-3xl border border-white/5">
+                <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-4">
+                    <Activity size={14} className="text-accent-green" />
                     Speed (km/h)
                 </div>
                 <div className="h-48 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} syncId="lapAnalysis">
+                        <AreaChart data={chartData} syncId="lapAnalysis" margin={chartMargin}>
                             <defs>
                                 <linearGradient id="colorSpeed" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="var(--accent-green)" stopOpacity={0.3}/>
@@ -106,13 +125,14 @@ export function LapAnalysisCharts({ lap }: Props) {
                                 stroke="rgba(255,255,255,0.2)"
                                 fontSize={9}
                                 tickFormatter={(val) => `${val}m`}
-                                minTickGap={50}
+                                minTickGap={xTickGap}
                             />
                             <YAxis 
                                 stroke="rgba(255,255,255,0.3)" 
                                 fontSize={10}
                                 tickFormatter={(val) => `${val}`}
                                 domain={['auto', 'auto']}
+                                width={yAxisWidth}
                             />
                             <Tooltip 
                                 contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '12px', fontSize: '10px' }}
@@ -132,7 +152,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                             />
                             <Brush 
                                 dataKey="distance" 
-                                height={20} 
+                                height={isCompact ? 16 : 20} 
                                 stroke="var(--accent-green)" 
                                 fill="rgba(0,0,0,0.5)"
                                 travellerWidth={10}
@@ -145,14 +165,14 @@ export function LapAnalysisCharts({ lap }: Props) {
             </div>
 
             {/* Combined G-Force Chart */}
-            <div className="bg-[var(--card-bg)] p-4 rounded-3xl border border-white/5">
-                <div className="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold uppercase tracking-widest mb-4">
-                    <Zap size={14} className="text-[var(--accent-red)]" />
+            <div className="bg-card-bg p-3 sm:p-4 rounded-3xl border border-white/5">
+                <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-4">
+                    <Zap size={14} className="text-accent-red" />
                     G-Force Analysis
                 </div>
                 <div className="h-56 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} syncId="lapAnalysis">
+                        <AreaChart data={chartData} syncId="lapAnalysis" margin={chartMargin}>
                             <defs>
                                 <linearGradient id="colorLong" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="var(--accent-red)" stopOpacity={0.2}/>
@@ -173,13 +193,14 @@ export function LapAnalysisCharts({ lap }: Props) {
                                 stroke="rgba(255,255,255,0.2)"
                                 fontSize={9}
                                 tickFormatter={(val) => `${val}m`}
-                                minTickGap={50}
+                                minTickGap={xTickGap}
                             />
                             <YAxis 
                                 stroke="rgba(255,255,255,0.3)" 
                                 fontSize={10}
                                 domain={[-1.5, 1.5]}
                                 ticks={[-1.5, -1, -0.5, 0, 0.5, 1, 1.5]}
+                                width={yAxisWidth}
                             />
                             <Tooltip 
                                 contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '12px', fontSize: '10px' }}
@@ -223,9 +244,9 @@ export function LapAnalysisCharts({ lap }: Props) {
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
-                <div className="mt-2 flex justify-between text-[8px] font-bold uppercase tracking-tighter text-[var(--text-secondary)] px-2">
+                <div className="mt-2 flex justify-between text-[8px] font-bold uppercase tracking-tighter text-text-secondary px-2">
                     <div className="flex gap-4">
-                        <span className="text-[var(--accent-red)]">Red: Long G</span>
+                        <span className="text-accent-red">Red: Long G</span>
                         <span className="text-[#3B82F6]">Blue: Lat G</span>
                         <span className="text-[#FBBF24]">Yellow: Total G</span>
                     </div>
@@ -234,3 +255,4 @@ export function LapAnalysisCharts({ lap }: Props) {
         </div>
     );
 }
+

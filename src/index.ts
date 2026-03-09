@@ -1,7 +1,9 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 
 type AppBindings = CloudflareBindings & {
   DB?: D1Database;
+  BASIC_AUTH_USERNAME?: string;
+  BASIC_AUTH_PASSWORD?: string;
 };
 
 type SyncOperation = {
@@ -16,7 +18,61 @@ const app = new Hono<{ Bindings: AppBindings }>();
 
 const TRACKS_TABLE_SQL = "CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, data TEXT, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)";
 
-async function ensureDb(c: Parameters<typeof app.get>[1] extends (arg: infer T) => any ? T : never) {
+type AppContext = Context<{ Bindings: AppBindings }>;
+
+function parseBasicAuth(headerValue: string | undefined) {
+  if (!headerValue || !headerValue.startsWith("Basic ")) {
+    return null;
+  }
+
+  const encoded = headerValue.slice("Basic ".length).trim();
+  if (!encoded) {
+    return null;
+  }
+
+  try {
+    const decoded = atob(encoded);
+    const separatorIndex = decoded.indexOf(":");
+    if (separatorIndex < 0) {
+      return null;
+    }
+
+    return {
+      username: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+app.use("/api/*", async (c, next) => {
+  const expectedUsername = c.env.BASIC_AUTH_USERNAME;
+  const expectedPassword = c.env.BASIC_AUTH_PASSWORD;
+
+  if (!expectedUsername || !expectedPassword) {
+    return c.json(
+      {
+        ok: false,
+        error: "Basic auth not configured. Set BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD.",
+      },
+      503,
+    );
+  }
+
+  const credentials = parseBasicAuth(c.req.header("authorization"));
+  const authorized =
+    credentials?.username === expectedUsername && credentials?.password === expectedPassword;
+
+  if (!authorized) {
+    c.header("WWW-Authenticate", 'Basic realm="Apex Lap Timer API"');
+    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  }
+
+  await next();
+});
+
+async function ensureDb(c: AppContext) {
   const db = c.env.DB;
   if (!db) {
     return c.json(
@@ -75,7 +131,9 @@ app.post("/api/sync", async (c) => {
   }
 
   const db = dbOrResponse;
-  const body = await c.req.json<{ operations?: SyncOperation[] }>().catch(() => ({}));
+  const body = await c.req.json<{ operations?: SyncOperation[] }>().catch(
+    (): { operations?: SyncOperation[] } => ({}),
+  );
   const operations = Array.isArray(body.operations) ? body.operations : [];
 
   if (operations.length === 0) {
@@ -124,3 +182,5 @@ app.post("/api/sync", async (c) => {
 });
 
 export default app;
+
+

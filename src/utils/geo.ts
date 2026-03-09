@@ -91,3 +91,86 @@ export function getExpectedTime(points: TrackPoint[], currentDistance: number): 
     }
     return 0;
 }
+
+export interface TrackProjectionOptions {
+    minDistance?: number;
+    maxDistance?: number;
+    maxLateralError?: number;
+    targetDistance?: number;
+    continuityWeight?: number;
+}
+
+export interface TrackProjectionResult {
+    distance: number;
+    lateralError: number;
+}
+
+export function projectToTrackDistance(
+    points: TrackPoint[],
+    lat: number,
+    lon: number,
+    options: TrackProjectionOptions = {},
+): TrackProjectionResult | null {
+    if (points.length < 2) {
+        return null;
+    }
+
+    const minDistance = options.minDistance ?? 0;
+    const maxDistance = options.maxDistance ?? Number.POSITIVE_INFINITY;
+    const maxLateralError = options.maxLateralError ?? Number.POSITIVE_INFINITY;
+    const targetDistance = options.targetDistance;
+    const continuityWeight = options.continuityWeight ?? 0;
+
+    let best: TrackProjectionResult | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+
+        if (p2.distance < minDistance || p1.distance > maxDistance) {
+            continue;
+        }
+
+        const a = toLocal(p1.lat, p1.lon, lat, lon);
+        const b = toLocal(p2.lat, p2.lon, lat, lon);
+
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) {
+            continue;
+        }
+
+        let t = (-(a.x * dx + a.y * dy)) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+
+        const closestX = a.x + t * dx;
+        const closestY = a.y + t * dy;
+        const lateralError = Math.hypot(closestX, closestY);
+        if (lateralError > maxLateralError) {
+            continue;
+        }
+
+        const segmentDistance = p1.distance + (p2.distance - p1.distance) * t;
+        if (segmentDistance < minDistance || segmentDistance > maxDistance) {
+            continue;
+        }
+
+        const continuityPenalty =
+            targetDistance === undefined ? 0 : Math.abs(segmentDistance - targetDistance) * continuityWeight;
+        const score = lateralError + continuityPenalty;
+
+        if (score < bestScore) {
+            bestScore = score;
+            best = {
+                distance: segmentDistance,
+                lateralError,
+            };
+        }
+    }
+
+    return best;
+}
+
+
