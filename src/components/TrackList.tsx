@@ -18,14 +18,14 @@ export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateN
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Saved Tracks</h1>
                 <button
                     onClick={onCreateNew}
-                    className="bg-white text-black px-4 py-2 rounded-full font-medium flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors w-full sm:w-auto"
+                    className="apex-btn-primary px-4 py-2.5 rounded-full flex items-center justify-center gap-2 w-full sm:w-auto"
                 >
                     <Plus size={18} /> New Track
                 </button>
             </div>
 
             {tracks.length === 0 ? (
-                <div className="text-center py-16 text-text-secondary border border-white/10 rounded-3xl border-dashed">
+                <div className="text-center py-16 text-text-secondary border border-white/10 rounded-3xl border-dashed apex-panel-muted">
                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Flag className="opacity-50" size={24} />
                     </div>
@@ -35,7 +35,7 @@ export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateN
             ) : (
                 <div className="space-y-3 sm:space-y-4">
                     {tracks.map(track => (
-                        <div key={track.id} className="bg-card-bg p-4 sm:p-5 rounded-3xl border border-white/5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between group hover:border-white/20 transition-colors">
+                        <div key={track.id} className="apex-panel p-4 sm:p-5 rounded-3xl flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between group hover:border-white/20 transition-colors">
                             <div className="min-w-0">
                                 <h3 className="text-lg sm:text-xl font-medium mb-1 truncate">{track.name}</h3>
                                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm text-text-secondary">
@@ -59,13 +59,13 @@ export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateN
                                 </button>
                                 <button
                                     onClick={() => onDelete(track.id)}
-                                    className="p-2.5 sm:p-3 text-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors"
+                                    className="p-2.5 sm:p-3 text-text-secondary hover:text-accent-red hover:bg-accent-red/10 rounded-full transition-colors"
                                 >
                                     <Trash2 size={20} />
                                 </button>
                                 <button
                                     onClick={() => onSelect(track)}
-                                    className="p-3 sm:p-4 bg-white text-black rounded-full hover:bg-gray-200 transition-colors shadow-lg"
+                                    className="p-3 sm:p-4 bg-accent-green text-black rounded-full hover:brightness-110 transition-colors shadow-lg"
                                 >
                                     <Play size={20} className="ml-0.5" />
                                 </button>

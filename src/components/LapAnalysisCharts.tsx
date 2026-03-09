@@ -105,7 +105,7 @@ export function LapAnalysisCharts({ lap }: Props) {
             </div>
 
             {/* Speed Chart */}
-            <div className="bg-card-bg p-3 sm:p-4 rounded-3xl border border-white/5">
+            <div className="apex-panel p-3 sm:p-4 rounded-3xl">
                 <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-4">
                     <Activity size={14} className="text-accent-green" />
                     Speed (km/h)
@@ -165,7 +165,7 @@ export function LapAnalysisCharts({ lap }: Props) {
             </div>
 
             {/* Combined G-Force Chart */}
-            <div className="bg-card-bg p-3 sm:p-4 rounded-3xl border border-white/5">
+            <div className="apex-panel p-3 sm:p-4 rounded-3xl">
                 <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-4">
                     <Zap size={14} className="text-accent-red" />
                     G-Force Analysis
@@ -179,12 +179,12 @@ export function LapAnalysisCharts({ lap }: Props) {
                                     <stop offset="95%" stopColor="var(--accent-red)" stopOpacity={0}/>
                                 </linearGradient>
                                 <linearGradient id="colorLat" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2}/>
-                                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                                    <stop offset="5%" stopColor="var(--accent-blue)" stopOpacity={0.2}/>
+                                    <stop offset="95%" stopColor="var(--accent-blue)" stopOpacity={0}/>
                                 </linearGradient>
                                 <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#FBBF24" stopOpacity={0.1}/>
-                                    <stop offset="95%" stopColor="#FBBF24" stopOpacity={0}/>
+                                    <stop offset="5%" stopColor="var(--accent-yellow)" stopOpacity={0.1}/>
+                                    <stop offset="95%" stopColor="var(--accent-yellow)" stopOpacity={0}/>
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -214,7 +214,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                                 name="Total G"
                                 type="monotone" 
                                 dataKey="totalG" 
-                                stroke="#FBBF24" 
+                                stroke="var(--accent-yellow)" 
                                 fillOpacity={1} 
                                 fill="url(#colorTotal)" 
                                 strokeWidth={1}
@@ -235,7 +235,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                                 name="Lat G"
                                 type="monotone" 
                                 dataKey="latG" 
-                                stroke="#3B82F6" 
+                                stroke="var(--accent-blue)" 
                                 fillOpacity={1} 
                                 fill="url(#colorLat)" 
                                 strokeWidth={2}
@@ -247,8 +247,8 @@ export function LapAnalysisCharts({ lap }: Props) {
                 <div className="mt-2 flex justify-between text-[8px] font-bold uppercase tracking-tighter text-text-secondary px-2">
                     <div className="flex gap-4">
                         <span className="text-accent-red">Red: Long G</span>
-                        <span className="text-[#3B82F6]">Blue: Lat G</span>
-                        <span className="text-[#FBBF24]">Yellow: Total G</span>
+                        <span className="text-accent-blue">Blue: Lat G</span>
+                        <span className="text-accent-yellow">Yellow: Total G</span>
                     </div>
                 </div>
             </div>

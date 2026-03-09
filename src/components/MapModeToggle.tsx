@@ -34,7 +34,7 @@ export function MapModeToggle({ mode, onToggle, className = "" }: Props) {
         <motion.button
             layout
             onClick={handleClick}
-            className={`flex items-center bg-black/50 backdrop-blur-md rounded-full border border-white/10 text-accent-green overflow-hidden whitespace-nowrap shadow-lg ${className}`}
+            className={`flex items-center apex-pill text-accent-green overflow-hidden whitespace-nowrap shadow-lg ${className}`}
             initial={false}
             animate={{
                 width: isExpanded ? 'auto' : '48px',

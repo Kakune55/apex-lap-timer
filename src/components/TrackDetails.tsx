@@ -32,7 +32,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
             <div className="relative z-30 p-6 flex justify-between items-center bg-linear-to-b from-black/80 to-transparent">
                 <button 
                     onClick={onBack}
-                    className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full transition-colors"
+                    className="p-3 apex-pill hover:bg-white/20 transition-colors"
                 >
                     <ArrowLeft size={24} />
                 </button>
@@ -60,7 +60,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     <div className="absolute inset-0 pointer-events-none bg-linear-to-t from-bg-color via-transparent to-transparent"></div>
                     
                     {/* Map Mode Label */}
-                    <div className="absolute bottom-4 left-6 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                    <div className="absolute bottom-4 left-6 apex-pill px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
                         Mode: {mapMode.replace('-', ' ')}
                     </div>
                 </div>
@@ -68,7 +68,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                 <div className="px-6 -mt-12 relative z-10 space-y-6">
                     {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-card-bg p-5 rounded-3xl border border-white/5">
+                        <div className="apex-panel p-5 rounded-3xl">
                             <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-2">
                                 <Trophy size={14} className="text-accent-green" />
                                 Best Lap
@@ -77,7 +77,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                 {formatTime(track.bestTime)}
                             </div>
                         </div>
-                        <div className="bg-card-bg p-5 rounded-3xl border border-white/5">
+                        <div className="apex-panel p-5 rounded-3xl">
                             <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-2">
                                 <Ruler size={14} />
                                 Distance
@@ -119,7 +119,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                         </div>
                         
                         {!track.laps || track.laps.length === 0 ? (
-                            <div className="bg-white/5 p-8 rounded-3xl text-center text-text-secondary border border-dashed border-white/10">
+                            <div className="apex-panel-muted p-8 rounded-3xl text-center text-text-secondary border-dashed">
                                 No detailed history available. Record new laps to see analysis.
                             </div>
                         ) : (
@@ -134,7 +134,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                         className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                                             selectedLap?.id === lap.id 
                                             ? 'bg-accent-green/10 border-accent-green shadow-[0_0_20px_rgba(0,255,102,0.1)]' 
-                                            : 'bg-card-bg border-white/5 hover:border-white/20'
+                                            : 'apex-panel hover:border-white/20'
                                         } flex justify-between items-center`}
                                     >
                                         <div className="flex items-center gap-3">
@@ -161,7 +161,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     </div>
 
                     {/* Track Info & Sectors */}
-                    <div className="bg-card-bg p-6 rounded-3xl border border-white/5">
+                    <div className="apex-panel p-6 rounded-3xl">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
                                 <MapIcon size={14} /> Track Info

@@ -17,7 +17,7 @@ function DevTools() {
             <button
                 onClick={() => setIsOpen(true)}
                 className={`fixed bottom-6 right-6 p-4 rounded-full shadow-2xl z-50 transition-colors ${
-                    simMode ? 'bg-accent-green text-black' : 'bg-white/10 text-white hover:bg-white/20 backdrop-blur-md'
+                    simMode ? 'bg-accent-green text-black' : 'apex-pill text-white hover:bg-white/20'
                 }`}
             >
                 <Bug size={24} />
@@ -244,7 +244,7 @@ export default function App() {
 
     return (
         <div className="min-h-screen bg-bg-color text-white selection:bg-white/20">
-            <div className={`fixed bottom-6 right-24 z-40 flex items-center gap-2 rounded-2xl border border-white/15 bg-black/65 px-3 py-2 text-xs backdrop-blur-md shadow-xl transition-all duration-500 ${showSyncIndicator ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+            <div className={`fixed bottom-6 right-24 z-40 flex items-center gap-2 rounded-2xl apex-glass px-3 py-2 text-xs shadow-xl transition-all duration-500 ${showSyncIndicator ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
                 <Cloud size={14} className="text-white/60" />
                 <SyncIcon size={14} className={`${syncAccentClass} ${syncStatus.state === 'syncing' ? 'animate-spin' : ''}`} />
                 <span className="font-medium text-white/90">{syncText}</span>

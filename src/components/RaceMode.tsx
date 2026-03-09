@@ -215,10 +215,10 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
             {/* Header */}
             <div className="relative z-20 p-6 flex items-center justify-between pt-8">
-                <button onClick={onBack} className="p-3 bg-black/50 backdrop-blur-md rounded-full hover:bg-white/10 transition-colors border border-white/10">
+                <button onClick={onBack} className="p-3 apex-pill hover:bg-white/10 transition-colors">
                     <ChevronLeft size={24} />
                 </button>
-                <div className="text-center bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
+                <div className="text-center apex-pill px-6 py-2">
                     <h2 className="text-sm font-bold uppercase tracking-widest text-text-secondary">{track.name}</h2>
                     <div className="text-xs text-white mt-0.5 font-medium">
                         {raceState === 'waiting' ? 'APPROACH START LINE' : raceState === 'finished' ? 'FINISHED' : 'RACING'}
@@ -240,7 +240,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 {/* Time & Delta Grid */}
                 <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-2 sm:mb-3">
                     {/* Time */}
-                    <div className="bg-card-bg/50 backdrop-blur-sm rounded-2xl p-3 sm:p-5 border border-white/10 shadow-2xl relative overflow-hidden flex flex-col justify-center">
+                    <div className="apex-panel rounded-2xl p-3 sm:p-5 relative overflow-hidden flex flex-col justify-center">
                         <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Time</div>
                         <div className="text-2xl sm:text-4xl font-sans font-bold tabular-nums tracking-tighter">
                             {formatTime(currentLapTime)}
@@ -252,7 +252,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
                     {/* Delta */}
                     <div className={`rounded-2xl p-3 sm:p-5 border shadow-2xl transition-colors duration-300 backdrop-blur-sm flex flex-col justify-center ${
-                        raceState === 'waiting' ? 'bg-card-bg/50 border-white/10' :
+                        raceState === 'waiting' ? 'apex-panel-muted' :
                         isFaster ? 'bg-accent-green/20 border-accent-green/50' : 'bg-accent-red/20 border-accent-red/50'
                     }`}>
                         <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Delta</div>
@@ -267,7 +267,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
                 {/* Laps (Circuit only) */}
                 {track.type === 'circuit' && laps.length > 0 && (
-                    <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-2 sm:p-3 border border-white/5">
+                    <div className="apex-panel-muted rounded-2xl p-2 sm:p-3">
                         <div className="flex justify-between items-center mb-1.5">
                             <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary">Previous Laps</div>
                             <label className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-text-secondary cursor-pointer hover:text-white transition-colors">
@@ -307,7 +307,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             {/* Sprint Finish Modal */}
             {showSprintModal && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
-                    <div className="bg-card-bg border border-white/10 p-8 rounded-3xl max-w-sm w-full shadow-2xl text-center">
+                    <div className="apex-panel p-8 rounded-3xl max-w-sm w-full text-center">
                         <h3 className="text-2xl font-bold mb-2">Sprint Finished!</h3>
                         <div className="text-5xl font-sans font-bold mb-6 text-accent-green tabular-nums">
                             {formatTime(sprintTime)}
@@ -333,7 +333,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                             });
                                             onBack();
                                         }}
-                                        className="flex-1 bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors"
+                                        className="flex-1 apex-btn-primary py-3"
                                     >
                                         Update
                                     </button>
@@ -368,7 +368,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                         });
                                         onBack();
                                     }}
-                                    className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors"
+                                    className="w-full apex-btn-primary py-3"
                                 >
                                     Continue
                                 </button>

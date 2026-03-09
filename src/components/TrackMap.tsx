@@ -104,17 +104,17 @@ export function TrackMap({
     };
 
     return (
-        <MapContainer center={center} zoom={18} style={{ height: '100%', width: '100%', zIndex: 10, background: '#f5f5f5' }} zoomControl={false} attributionControl={false}>
+        <MapContainer center={center} zoom={18} style={{ height: '100%', width: '100%', zIndex: 10, background: '#090a0b' }} zoomControl={false} attributionControl={false}>
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
             {currentPos && <MapUpdater center={center} offsetY={offsetY} />}
             {!currentPos && autoFocusPoints.length > 0 && <MapAutoFocus points={autoFocusPoints} />}
 
             {/* Reference Track */}
             {referencePositions.length > 0 && (
-                <Polyline positions={referencePositions} color="#000000" weight={10} opacity={0.3} />
+                <Polyline positions={referencePositions} color="#FFFFFF" weight={8} opacity={0.22} />
             )}
 
             {/* Recorded Track */}

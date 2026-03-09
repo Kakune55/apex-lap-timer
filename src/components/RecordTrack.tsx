@@ -107,8 +107,8 @@ export function RecordTrack({ onSave, onCancel }: Props) {
 
             <div className="relative z-20 flex flex-col h-full p-6 max-w-md mx-auto w-full">
                 <div className="flex justify-between items-center mb-8 pt-4">
-                    <h2 className="text-2xl font-bold bg-black/50 px-4 py-2 rounded-full backdrop-blur-md">Record Track</h2>
-                    <button onClick={onCancel} className="text-text-secondary hover:text-white font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-md">Cancel</button>
+                    <h2 className="text-2xl font-bold apex-pill px-4 py-2">Record Track</h2>
+                    <button onClick={onCancel} className="text-text-secondary hover:text-white font-medium apex-pill px-4 py-2">Cancel</button>
                 </div>
 
                 {step === 'setup' && (
@@ -120,7 +120,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                 value={trackName}
                                 onChange={e => setTrackName(e.target.value)}
                                 placeholder="e.g. Nurburgring Nordschleife"
-                                className="w-full bg-card-bg/90 backdrop-blur-md border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-white/30 text-lg transition-colors"
+                                className="w-full apex-panel-muted px-5 py-4 text-white focus:outline-none focus:border-white/20 text-lg transition-colors"
                             />
                         </div>
 
@@ -129,14 +129,14 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                             <div className="grid grid-cols-2 gap-4">
                                 <button
                                     onClick={() => setTrackType('circuit')}
-                                    className={`p-5 rounded-2xl border text-center transition-all backdrop-blur-md ${trackType === 'circuit' ? 'bg-white text-black border-white shadow-lg scale-[1.02]' : 'bg-card-bg/90 border-white/10 text-text-secondary hover:border-white/20'}`}
+                                    className={`p-5 rounded-2xl border text-center transition-all backdrop-blur-md ${trackType === 'circuit' ? 'bg-accent-green text-black border-accent-green shadow-lg scale-[1.02]' : 'apex-panel-muted text-text-secondary hover:border-white/20'}`}
                                 >
                                     <div className="font-bold mb-1 text-lg">Circuit</div>
                                     <div className="text-xs opacity-70">Loop track</div>
                                 </button>
                                 <button
                                     onClick={() => setTrackType('sprint')}
-                                    className={`p-5 rounded-2xl border text-center transition-all backdrop-blur-md ${trackType === 'sprint' ? 'bg-white text-black border-white shadow-lg scale-[1.02]' : 'bg-card-bg/90 border-white/10 text-text-secondary hover:border-white/20'}`}
+                                    className={`p-5 rounded-2xl border text-center transition-all backdrop-blur-md ${trackType === 'sprint' ? 'bg-accent-green text-black border-accent-green shadow-lg scale-[1.02]' : 'apex-panel-muted text-text-secondary hover:border-white/20'}`}
                                 >
                                     <div className="font-bold mb-1 text-lg">Sprint</div>
                                     <div className="text-xs opacity-70">Point to point</div>
@@ -148,7 +148,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                             <button
                                 onClick={handleStart}
                                 disabled={!trackName || !gps}
-                                className="w-full bg-white text-black font-bold py-5 rounded-2xl disabled:opacity-50 flex justify-center items-center gap-2 text-lg transition-transform active:scale-95 shadow-xl"
+                                className="w-full apex-btn-primary py-5 disabled:opacity-50 flex justify-center items-center gap-2 text-lg shadow-xl"
                             >
                                 <MapPin size={22} /> Set Start Gate
                             </button>
@@ -165,7 +165,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             onClick={requestPermission}
-                                            className="bg-white text-black font-bold py-2 rounded-xl text-sm hover:bg-gray-200 transition-colors"
+                                            className="bg-accent-green text-black font-bold py-2 rounded-xl text-sm hover:brightness-110 transition-colors"
                                         >
                                             Enable GPS
                                         </button>
@@ -193,7 +193,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                         {!gps && (
                             <button
                                 onClick={requestPermission}
-                                className="mt-4 bg-white text-black font-bold py-2.5 px-4 rounded-xl text-sm hover:bg-gray-200 transition-colors"
+                                className="mt-4 bg-accent-green text-black font-bold py-2.5 px-4 rounded-xl text-sm hover:brightness-110 transition-colors"
                             >
                                 Enable GPS Permission
                             </button>
@@ -219,7 +219,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
 
                         <button
                             onClick={handleStop}
-                            className="w-full bg-white text-black font-bold py-4 sm:py-5 rounded-2xl flex justify-center items-center gap-2 text-base sm:text-lg transition-transform active:scale-95 shadow-xl mt-4 sm:mt-8"
+                            className="w-full apex-btn-primary py-4 sm:py-5 rounded-2xl flex justify-center items-center gap-2 text-base sm:text-lg shadow-xl mt-4 sm:mt-8"
                         >
                             {trackType === 'circuit' ? <StopCircle size={20} /> : <Flag size={20} />}
                             {trackType === 'circuit' ? 'Stop & Save Lap' : 'Set Finish Line'}
