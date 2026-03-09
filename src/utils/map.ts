@@ -54,9 +54,9 @@ function getColorForPoint(
 
     switch (mode) {
         case 'dt-absolute':
-            // User request: Red for negative Dt (faster), Green for positive Dt (slower)
+            // Faster than reference (negative delta) is green; slower is red.
             if (curr.delta === undefined) return GRAY;
-            return curr.delta < 0 ? RED : GREEN;
+            return curr.delta < 0 ? GREEN : RED;
 
         case 'dt-trend':
             // Dt shrinking (improving) = Green, Dt growing (losing time) = Red

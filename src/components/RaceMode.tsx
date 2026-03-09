@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
 import { Track, TrackPoint, Lap } from '../types';
 import { getDistance, checkGateCrossing, formatTime, formatDelta, getExpectedTime, projectToTrackDistance } from '../utils/geo';
@@ -14,13 +14,14 @@ interface Props {
 }
 
 export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
+    const MAX_SECTOR_SEGMENTS = 3;
+    const MAX_SECTOR_GATES = MAX_SECTOR_SEGMENTS - 1;
     const { data: gps } = useGPS();
     const [raceState, setRaceState] = useState<'waiting' | 'racing' | 'finished'>('waiting');
     const [startTime, setStartTime] = useState(0);
     const [currentDistance, setCurrentDistance] = useState(0);
     const [currentLapTime, setCurrentLapTime] = useState(0);
     const [deltaTime, setDeltaTime] = useState(0);
-    const [laps, setLaps] = useState<number[]>([]);
     const [recordedPoints, setRecordedPoints] = useState<TrackPoint[]>([]);
     const [mapMode, setMapMode] = useState<MapViewMode>('dt-absolute');
 
@@ -28,11 +29,110 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const [autoUpdate, setAutoUpdate] = useState(track.autoUpdateRecord ?? true);
     const [showSprintModal, setShowSprintModal] = useState(false);
     const [sprintTime, setSprintTime] = useState(0);
+    const [nextSectorGateIndex, setNextSectorGateIndex] = useState(0);
+    const [currentSectorStartTime, setCurrentSectorStartTime] = useState(0);
+    const [currentLapSectorDeltas, setCurrentLapSectorDeltas] = useState<Array<number | null>>([null, null, null]);
+    const [displaySectorDeltas, setDisplaySectorDeltas] = useState<Array<number | null>>([null, null, null]);
+    const [isSectorDisplayFrozen, setIsSectorDisplayFrozen] = useState(false);
     const currentLapPointsRef = useRef<TrackPoint[]>([]);
     const projectedDistanceRef = useRef(0);
+    const currentLapSectorDeltasRef = useRef<Array<number | null>>([null, null, null]);
+    const freezeTimeoutRef = useRef<number | null>(null);
 
     const prevGpsRef = useRef(gps);
     const requestRef = useRef<number>(0);
+
+    const lapHistory = track.laps || [];
+    const sectorGates = (track.sectors || []).slice(0, MAX_SECTOR_GATES);
+
+    const sectorBoundaryDistances = useMemo(() => {
+        const sectors = sectorGates;
+        const gateDistances = sectors.map((sector, idx) => {
+            const projected = projectToTrackDistance(track.points, sector.lat, sector.lon, {
+                maxLateralError: 100,
+            });
+            const fallbackDistance = ((idx + 1) / (sectors.length + 1)) * track.totalDistance;
+            return Math.max(0, projected?.distance ?? fallbackDistance);
+        });
+
+        // Boundaries are gates plus finish line, so 2 gates => 3 sectors.
+        return [...gateDistances, track.totalDistance];
+    }, [sectorGates, track.points, track.totalDistance]);
+
+    const sectorBoundaryExpectedTimes = useMemo(
+        () => sectorBoundaryDistances.map((distance) => getExpectedTime(track.points, distance)),
+        [sectorBoundaryDistances, track.points],
+    );
+
+    const getLapSectorSplits = (lap: Lap): number[] => {
+        if (sectorBoundaryDistances.length === 0) {
+            return [];
+        }
+
+        const crossings = sectorBoundaryDistances.map((distance) => getExpectedTime(lap.points, distance));
+        const splits: number[] = [];
+        let previous = 0;
+        for (const current of crossings) {
+            splits.push(Math.max(0, current - previous));
+            previous = current;
+        }
+        return splits;
+    };
+
+    const lapSectorDeltas = useMemo(() => {
+        const map = new Map<string, number[]>();
+        for (let i = 0; i < lapHistory.length; i++) {
+            const current = lapHistory[i];
+            if (i === 0) {
+                map.set(current.id, []);
+                continue;
+            }
+
+            const prev = lapHistory[i - 1];
+            const currentSplits = getLapSectorSplits(current);
+            const prevSplits = getLapSectorSplits(prev);
+            const deltas = currentSplits.map((split, idx) => split - (prevSplits[idx] ?? split));
+            map.set(current.id, deltas);
+        }
+        return map;
+    }, [lapHistory, sectorBoundaryDistances]);
+
+    const updateLiveSectorDelta = (segmentIndex: number, value: number) => {
+        setCurrentLapSectorDeltas((prev) => {
+            const next = [...prev];
+            if (segmentIndex >= 0 && segmentIndex < MAX_SECTOR_SEGMENTS) {
+                next[segmentIndex] = value;
+            }
+            currentLapSectorDeltasRef.current = next;
+            if (!isSectorDisplayFrozen) {
+                setDisplaySectorDeltas(next);
+            }
+            return next;
+        });
+    };
+
+    const resetCurrentLapSectors = () => {
+        const cleared: Array<number | null> = [null, null, null];
+        setCurrentLapSectorDeltas(cleared);
+        currentLapSectorDeltasRef.current = cleared;
+        if (!isSectorDisplayFrozen) {
+            setDisplaySectorDeltas(cleared);
+        }
+    };
+
+    const holdSectorDisplayForFiveSeconds = () => {
+        setIsSectorDisplayFrozen(true);
+        if (freezeTimeoutRef.current !== null) {
+            clearTimeout(freezeTimeoutRef.current);
+            freezeTimeoutRef.current = null;
+        }
+
+        freezeTimeoutRef.current = window.setTimeout(() => {
+            setIsSectorDisplayFrozen(false);
+            setDisplaySectorDeltas(currentLapSectorDeltasRef.current);
+            freezeTimeoutRef.current = null;
+        }, 5000);
+    };
 
     // High frequency timer update for UI
     useEffect(() => {
@@ -63,6 +163,9 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 setRaceState('racing');
                 setStartTime(curr.timestamp);
                 setCurrentDistance(0);
+                setNextSectorGateIndex(0);
+                setCurrentSectorStartTime(0);
+                resetCurrentLapSectors();
                 projectedDistanceRef.current = 0;
                 const firstPoint = {
                     lat: curr.lat,
@@ -126,8 +229,31 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 setRecordedPoints(prev => [...prev, newPoint]);
             }
 
+            if (nextSectorGateIndex < sectorGates.length) {
+                const sectorGate = sectorGates[nextSectorGateIndex];
+                if (checkGateCrossing(prev.lat, prev.lon, curr.lat, curr.lon, sectorGate)) {
+                    const segmentIndex = nextSectorGateIndex;
+                    const expectedEnd = sectorBoundaryExpectedTimes[segmentIndex] || 0;
+                    const expectedStart = segmentIndex === 0 ? 0 : (sectorBoundaryExpectedTimes[segmentIndex - 1] || 0);
+                    const expectedSegmentTime = Math.max(0, expectedEnd - expectedStart);
+                    const currentSegmentTime = gpsLapTime - currentSectorStartTime;
+                    updateLiveSectorDelta(segmentIndex, currentSegmentTime - expectedSegmentTime);
+                    setCurrentSectorStartTime(gpsLapTime);
+                    setNextSectorGateIndex((prevIdx) => prevIdx + 1);
+                }
+            }
+
             // Check finish gate crossing
             if (checkGateCrossing(prev.lat, prev.lon, curr.lat, curr.lon, track.finishGate)) {
+                const finalSegmentIndex = sectorGates.length;
+                if (finalSegmentIndex < MAX_SECTOR_SEGMENTS) {
+                    const expectedEnd = sectorBoundaryExpectedTimes[finalSegmentIndex] || gpsLapTime;
+                    const expectedStart = finalSegmentIndex === 0 ? 0 : (sectorBoundaryExpectedTimes[finalSegmentIndex - 1] || 0);
+                    const expectedSegmentTime = Math.max(0, expectedEnd - expectedStart);
+                    const currentSegmentTime = gpsLapTime - currentSectorStartTime;
+                    updateLiveSectorDelta(finalSegmentIndex, currentSegmentTime - expectedSegmentTime);
+                }
+
                 const newLap: Lap = {
                     id: Math.random().toString(36).substr(2, 9),
                     time: gpsLapTime,
@@ -137,8 +263,6 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
                 if (track.type === 'circuit') {
                     // Lap completed
-                    setLaps(prevLaps => [...prevLaps, gpsLapTime]);
-
                     const isNewBest = gpsLapTime < track.bestTime;
                     const newHistory = [...(track.history || []), gpsLapTime];
                     const newLaps = [...(track.laps || []), newLap];
@@ -162,8 +286,12 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     }
 
                     // Reset for next lap
+                    holdSectorDisplayForFiveSeconds();
                     setStartTime(curr.timestamp);
                     setCurrentDistance(0);
+                    setNextSectorGateIndex(0);
+                    setCurrentSectorStartTime(0);
+                    resetCurrentLapSectors();
                     projectedDistanceRef.current = 0;
                     const firstPoint = {
                         lat: curr.lat,
@@ -188,10 +316,56 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         }
 
         prevGpsRef.current = curr;
-    }, [gps, raceState, track, startTime, autoUpdate, onUpdateTrack]);
+    }, [
+        gps,
+        raceState,
+        track,
+        startTime,
+        autoUpdate,
+        onUpdateTrack,
+        nextSectorGateIndex,
+        currentSectorStartTime,
+        sectorBoundaryExpectedTimes,
+        sectorGates,
+        isSectorDisplayFrozen,
+    ]);
+
+    useEffect(() => {
+        return () => {
+            if (freezeTimeoutRef.current !== null) {
+                clearTimeout(freezeTimeoutRef.current);
+                freezeTimeoutRef.current = null;
+            }
+        };
+    }, []);
 
     const speedKmh = Math.round((gps?.speed || 0) * 3.6);
     const isFaster = deltaTime <= 0;
+    const lastLap = lapHistory.length > 0 ? lapHistory[lapHistory.length - 1] : null;
+    const previousLap = lapHistory.length > 1 ? lapHistory[lapHistory.length - 2] : null;
+    const bestLapTime = lapHistory.length > 0 ? Math.min(...lapHistory.map((lap) => lap.time)) : null;
+    const lastLapColorClass =
+        !lastLap ? 'text-text-secondary' :
+        bestLapTime !== null && lastLap.time <= bestLapTime ? 'text-[var(--color-violet-600)]' :
+        previousLap && lastLap.time < previousLap.time ? 'text-accent-green' :
+        previousLap && lastLap.time > previousLap.time ? 'text-accent-yellow' :
+        'text-text-secondary';
+
+    const shortDelta = (ms: number) => {
+        const sign = ms > 0 ? '+' : '-';
+        const abs = Math.abs(ms);
+        return `${sign}${(abs / 1000).toFixed(1)}`;
+    };
+
+    const displaySectorValues = displaySectorDeltas.map((value) => (value === null ? '+0.0' : shortDelta(value)));
+
+    const toFixedSectorCount = (values: number[]) => {
+        const copy = values.slice(0, MAX_SECTOR_SEGMENTS);
+        while (copy.length < MAX_SECTOR_SEGMENTS) {
+            copy.push(0);
+        }
+        return copy;
+    };
 
     const toggleMapMode = () => {
         const modes: MapViewMode[] = ['dt-absolute', 'dt-trend', 'speed-heatmap'];
@@ -248,6 +422,9 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                         <div className="text-[13px] sm:text-[15px] text-text-secondary mt-0.5 sm:mt-1 font-sans font-semibold tabular-nums">
                             Best: {formatTime(track.bestTime)}
                         </div>
+                        <div className={`text-[12px] sm:text-[14px] mt-1 font-sans font-bold tabular-nums ${lastLapColorClass}`}>
+                            Last: {lastLap ? formatTime(lastLap.time) : '--:--.--'}
+                        </div>
                     </div>
 
                     {/* Delta */}
@@ -256,17 +433,38 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                         isFaster ? 'bg-accent-green/20 border-accent-green/50' : 'bg-accent-red/20 border-accent-red/50'
                     }`}>
                         <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Delta</div>
+                        <div className="text-[9px] font-bold uppercase tracking-widest text-text-secondary mb-1">Live Sectors</div>
                         <div className={`text-2xl sm:text-4xl font-sans font-bold tabular-nums tracking-tighter ${
                             raceState === 'waiting' ? 'text-text-secondary' :
                             isFaster ? 'text-accent-green' : 'text-accent-red'
                         }`}>
                             {raceState === 'waiting' ? '+0.00' : formatDelta(deltaTime)}
                         </div>
+                        <div className="mt-1 space-y-1">
+                            <div className="flex items-center gap-1.5 text-[10px] tabular-nums">
+                                {displaySectorValues.map((val, idx) => (
+                                    <span
+                                        key={`live-sector-val-${idx}`}
+                                        className={`${displaySectorDeltas[idx] === null ? 'text-text-secondary' : (displaySectorDeltas[idx]! < 0 ? 'text-accent-green' : displaySectorDeltas[idx]! > 0 ? 'text-accent-yellow' : 'text-text-secondary')}`}
+                                    >
+                                        {val}
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                {displaySectorDeltas.map((val, idx) => (
+                                    <span
+                                        key={`live-sector-bar-${idx}`}
+                                        className={`inline-block h-1.5 w-6 rounded-full ${val === null ? 'bg-white/20' : val < 0 ? 'bg-accent-green' : val > 0 ? 'bg-accent-yellow' : 'bg-white/30'}`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 {/* Laps (Circuit only) */}
-                {track.type === 'circuit' && laps.length > 0 && (
+                {track.type === 'circuit' && lapHistory.length > 0 && (
                     <div className="apex-panel-muted rounded-2xl p-2 sm:p-3">
                         <div className="flex justify-between items-center mb-1.5">
                             <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary">Previous Laps</div>
@@ -284,18 +482,40 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                             </label>
                         </div>
                         <div className="space-y-1">
-                            {laps.slice(-3).map((lap, i) => {
-                                const lapDelta = lap - track.bestTime;
+                            {lapHistory.slice(-3).reverse().map((lap, i) => {
+                                const lapDelta = lap.time - track.bestTime;
                                 const isLapFaster = lapDelta <= 0;
+                                const sectorDeltas = toFixedSectorCount(lapSectorDeltas.get(lap.id) || []);
                                 return (
-                                    <div key={i} className="flex justify-between items-center text-xs sm:text-sm font-sans tabular-nums bg-white/5 p-1.5 sm:p-2 rounded-xl">
-                                        <span className="text-text-secondary font-medium text-[10px] sm:text-xs">Lap {laps.length - Math.min(laps.length, 3) + i + 1}</span>
-                                        <div className="flex items-center gap-2 sm:gap-3">
-                                            <span className={`font-bold ${isLapFaster ? 'text-accent-green' : 'text-accent-red'}`}>
-                                                {formatDelta(lapDelta)}
-                                            </span>
-                                            <span className="font-bold text-white/90">{formatTime(lap)}</span>
+                                    <div key={lap.id} className="text-xs sm:text-sm font-sans tabular-nums bg-white/5 p-1.5 sm:p-2 rounded-xl">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-text-secondary font-medium text-[10px] sm:text-xs">Lap {lapHistory.length - i}</span>
+                                            <div className="flex items-center gap-2 sm:gap-3">
+                                                <span className={`font-bold ${isLapFaster ? 'text-accent-green' : 'text-accent-red'}`}>
+                                                    {formatDelta(lapDelta)}
+                                                </span>
+                                                <span className="font-bold text-white/90">{formatTime(lap.time)}</span>
+                                            </div>
                                         </div>
+                                        {sectorDeltas.length > 0 && (
+                                            <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                                                {sectorDeltas.map((sd, idx) => (
+                                                    <span
+                                                        key={`${lap.id}-bar-${idx}`}
+                                                        className={`inline-block h-1.5 w-4 rounded-full ${sd < 0 ? 'bg-accent-green' : sd > 0 ? 'bg-accent-yellow' : 'bg-white/30'}`}
+                                                    />
+                                                ))}
+                                                <span className="mx-1 text-white/25">|</span>
+                                                {sectorDeltas.map((sd, idx) => (
+                                                    <span
+                                                        key={`${lap.id}-num-${idx}`}
+                                                        className={`tabular-nums ${sd < 0 ? 'text-accent-green' : sd > 0 ? 'text-accent-yellow' : 'text-text-secondary'}`}
+                                                    >
+                                                        {shortDelta(sd)}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
