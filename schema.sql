@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS tracks (
+  id TEXT PRIMARY KEY,
+  data TEXT,
+  updated_at INTEGER NOT NULL,
+  deleted INTEGER NOT NULL DEFAULT 0
+);

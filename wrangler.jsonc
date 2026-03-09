@@ -11,6 +11,14 @@
 		"binding": "ASSETS",
 		"directory": "./public"
 	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "apex-lap-timer",
+			"database_id": "e2829e26-f0e8-486d-88de-aff8b4a4a251",
+			"remote": true
+		}
+	],
 	"observability": {
 		"enabled": true
 	},

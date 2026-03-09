@@ -1,0 +1,160 @@
+import { useState, useEffect } from 'react';
+
+export interface GPSData {
+    lat: number;
+    lon: number;
+    speed: number; // m/s
+    heading: number;
+    accuracy: number;
+    timestamp: number;
+}
+
+// --- Singleton State ---
+let isSimulating = false;
+let globalData: GPSData | null = null;
+let globalError: string | null = null;
+let simSpeedKmh = 72; // Default 72 km/h
+const listeners = new Set<() => void>();
+
+const notify = () => listeners.forEach(l => l());
+
+let simInterval: number | null = null;
+let watchId: number | null = null;
+let currentAngle = 0; // Keep track of angle so speed changes don't jump position
+
+const startSimulation = () => {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+    if (simInterval !== null) return;
+
+    const centerLat = 31.2304; // Shanghai
+    const centerLon = 121.4737;
+    const radius = 200; // 200m radius
+    let lastTime = Date.now();
+
+    simInterval = window.setInterval(() => {
+        const now = Date.now();
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+
+        const speedMs = simSpeedKmh / 3.6;
+        const angularVelocity = speedMs / radius;
+        currentAngle += angularVelocity * dt;
+
+        // Convert meters to lat/lon offsets
+        const latOffset = (radius * Math.cos(currentAngle)) / 111320;
+        const lonOffset = (radius * Math.sin(currentAngle)) / (40075000 * Math.cos(centerLat * Math.PI / 180) / 360);
+
+        // Heading is tangent to the circle
+        let heading = (currentAngle * 180 / Math.PI) + 90;
+        heading = (heading + 360) % 360;
+
+        globalData = {
+            lat: centerLat + latOffset,
+            lon: centerLon + lonOffset,
+            speed: speedMs,
+            heading: heading,
+            accuracy: 1,
+            timestamp: now
+        };
+        globalError = null;
+        notify();
+    }, 1000); // 1Hz update rate
+};
+
+const stopSimulation = () => {
+    if (simInterval !== null) {
+        clearInterval(simInterval);
+        simInterval = null;
+    }
+};
+
+const startRealGPS = () => {
+    if (isSimulating) return;
+    if (!('geolocation' in navigator)) {
+        globalError = 'Geolocation is not supported by your browser';
+        notify();
+        return;
+    }
+    if (watchId !== null) return;
+
+    watchId = navigator.geolocation.watchPosition(
+        (position) => {
+            globalData = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude,
+                speed: position.coords.speed || 0,
+                heading: position.coords.heading || 0,
+                accuracy: position.coords.accuracy,
+                timestamp: position.timestamp,
+            };
+            globalError = null;
+            notify();
+        },
+        (err) => {
+            globalError = err.message;
+            notify();
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000,
+        }
+    );
+};
+
+export const toggleSimulation = () => {
+    isSimulating = !isSimulating;
+    if (isSimulating) {
+        startSimulation();
+    } else {
+        stopSimulation();
+        startRealGPS();
+    }
+    notify();
+};
+
+export const setSimulationSpeed = (kmh: number) => {
+    simSpeedKmh = Math.max(0, kmh);
+    notify();
+};
+
+export function useGPS() {
+    const [state, setState] = useState({
+        data: globalData,
+        error: globalError,
+        simMode: isSimulating,
+        simSpeed: simSpeedKmh
+    });
+
+    useEffect(() => {
+        const handleUpdate = () => {
+            setState({
+                data: globalData,
+                error: globalError,
+                simMode: isSimulating,
+                simSpeed: simSpeedKmh
+            });
+        };
+        listeners.add(handleUpdate);
+
+        if (!isSimulating && watchId === null) {
+            startRealGPS();
+        }
+
+        return () => {
+            listeners.delete(handleUpdate);
+        };
+    }, []);
+
+    return {
+        data: state.data,
+        error: state.error,
+        simMode: state.simMode,
+        simSpeed: state.simSpeed,
+        toggleSimulation,
+        setSimulationSpeed
+    };
+}

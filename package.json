@@ -2,15 +2,29 @@
 	"name": "apex-lap-timer",
 	"type": "module",
 	"scripts": {
-		"dev": "wrangler dev",
-		"deploy": "wrangler deploy --minify",
+		"dev": "npm run build:frontend && wrangler dev",
+		"dev:frontend": "vite --port=3000 --host=0.0.0.0",
+		"build:frontend": "vite build",
+		"deploy": "npm run build:frontend && wrangler deploy --minify",
 		"cf-typegen": "wrangler types --env-interface CloudflareBindings"
 	},
 	"dependencies": {
-		"hono": "^4.12.5"
+		"hono": "^4.12.5",
+		"leaflet": "^1.9.4",
+		"lucide-react": "^0.546.0",
+		"motion": "^12.23.24",
+		"react": "^19.1.1",
+		"react-dom": "^19.1.1",
+		"react-leaflet": "^5.0.0",
+		"recharts": "^3.3.0"
 	},
 	"devDependencies": {
+		"@tailwindcss/vite": "^4.1.14",
+		"@types/leaflet": "^1.9.21",
 		"@types/node": "^25.3.5",
+		"@vitejs/plugin-react": "^5.0.4",
+		"tailwindcss": "^4.1.14",
+		"vite": "^7.1.7",
 		"wrangler": "^4.71.0"
 	}
 }
