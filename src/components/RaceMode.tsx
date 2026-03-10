@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
 import { Track, TrackPoint, Lap } from '../types';
-import { getDistance, checkGateCrossing, formatTime, formatDelta, getExpectedTime, projectToTrackDistance } from '../utils/geo';
+import { getDistance, estimateGateCrossingTime, formatTime, formatDelta, getExpectedTime, projectToTrackDistance } from '../utils/geo';
 import { ChevronLeft } from 'lucide-react';
 import { TrackMap } from './TrackMap';
 import { MapViewMode } from '../utils/map';
@@ -159,21 +159,36 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
         if (raceState === 'waiting') {
             // Check start gate crossing
-            if (checkGateCrossing(prev.lat, prev.lon, curr.lat, curr.lon, track.startGate)) {
+            const startCrossingTime = estimateGateCrossingTime(
+                prev.lat,
+                prev.lon,
+                prev.timestamp,
+                curr.lat,
+                curr.lon,
+                curr.timestamp,
+                track.startGate,
+            );
+
+            if (startCrossingTime !== null) {
+                const startDt = curr.timestamp - prev.timestamp;
+                const startRatio = startDt <= 0 ? 1 : Math.max(0, Math.min(1, (startCrossingTime - prev.timestamp) / startDt));
+                const startLat = prev.lat + (curr.lat - prev.lat) * startRatio;
+                const startLon = prev.lon + (curr.lon - prev.lon) * startRatio;
+                const startSpeed = prev.speed + (curr.speed - prev.speed) * startRatio;
                 setRaceState('racing');
-                setStartTime(curr.timestamp);
+                setStartTime(startCrossingTime);
                 setCurrentDistance(0);
                 setNextSectorGateIndex(0);
                 setCurrentSectorStartTime(0);
                 resetCurrentLapSectors();
                 projectedDistanceRef.current = 0;
                 const firstPoint = {
-                    lat: curr.lat,
-                    lon: curr.lon,
+                    lat: startLat,
+                    lon: startLon,
                     timeOffset: 0,
                     distance: 0,
                     delta: 0,
-                    speed: curr.speed
+                    speed: startSpeed
                 };
                 currentLapPointsRef.current = [firstPoint];
                 setRecordedPoints([firstPoint]);
@@ -231,47 +246,86 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
             if (nextSectorGateIndex < sectorGates.length) {
                 const sectorGate = sectorGates[nextSectorGateIndex];
-                if (checkGateCrossing(prev.lat, prev.lon, curr.lat, curr.lon, sectorGate)) {
+                const sectorCrossingTime = estimateGateCrossingTime(
+                    prev.lat,
+                    prev.lon,
+                    prev.timestamp,
+                    curr.lat,
+                    curr.lon,
+                    curr.timestamp,
+                    sectorGate,
+                );
+
+                if (sectorCrossingTime !== null) {
                     const segmentIndex = nextSectorGateIndex;
+                    const sectorLapTime = sectorCrossingTime - startTime;
                     const expectedEnd = sectorBoundaryExpectedTimes[segmentIndex] || 0;
                     const expectedStart = segmentIndex === 0 ? 0 : (sectorBoundaryExpectedTimes[segmentIndex - 1] || 0);
                     const expectedSegmentTime = Math.max(0, expectedEnd - expectedStart);
-                    const currentSegmentTime = gpsLapTime - currentSectorStartTime;
+                    const currentSegmentTime = sectorLapTime - currentSectorStartTime;
                     updateLiveSectorDelta(segmentIndex, currentSegmentTime - expectedSegmentTime);
-                    setCurrentSectorStartTime(gpsLapTime);
+                    setCurrentSectorStartTime(sectorLapTime);
                     setNextSectorGateIndex((prevIdx) => prevIdx + 1);
                 }
             }
 
             // Check finish gate crossing
-            if (checkGateCrossing(prev.lat, prev.lon, curr.lat, curr.lon, track.finishGate)) {
+            const finishCrossingTime = estimateGateCrossingTime(
+                prev.lat,
+                prev.lon,
+                prev.timestamp,
+                curr.lat,
+                curr.lon,
+                curr.timestamp,
+                track.finishGate,
+            );
+
+            if (finishCrossingTime !== null) {
+                const finishLapTime = Math.max(0, finishCrossingTime - startTime);
+                const finishDt = curr.timestamp - prev.timestamp;
+                const finishRatio = finishDt <= 0 ? 1 : Math.max(0, Math.min(1, (finishCrossingTime - prev.timestamp) / finishDt));
+                const finishLat = prev.lat + (curr.lat - prev.lat) * finishRatio;
+                const finishLon = prev.lon + (curr.lon - prev.lon) * finishRatio;
+                const finishSpeed = prev.speed + (curr.speed - prev.speed) * finishRatio;
                 const finalSegmentIndex = sectorGates.length;
                 if (finalSegmentIndex < MAX_SECTOR_SEGMENTS) {
-                    const expectedEnd = sectorBoundaryExpectedTimes[finalSegmentIndex] || gpsLapTime;
+                    const expectedEnd = sectorBoundaryExpectedTimes[finalSegmentIndex] || finishLapTime;
                     const expectedStart = finalSegmentIndex === 0 ? 0 : (sectorBoundaryExpectedTimes[finalSegmentIndex - 1] || 0);
                     const expectedSegmentTime = Math.max(0, expectedEnd - expectedStart);
-                    const currentSegmentTime = gpsLapTime - currentSectorStartTime;
+                    const currentSegmentTime = finishLapTime - currentSectorStartTime;
                     updateLiveSectorDelta(finalSegmentIndex, currentSegmentTime - expectedSegmentTime);
                 }
 
+                const lapPoints = [
+                    ...currentLapPointsRef.current,
+                    {
+                        lat: finishLat,
+                        lon: finishLon,
+                        timeOffset: finishLapTime,
+                        distance: track.totalDistance,
+                        delta: currentDelta,
+                        speed: finishSpeed,
+                    },
+                ];
+
                 const newLap: Lap = {
                     id: Math.random().toString(36).substr(2, 9),
-                    time: gpsLapTime,
-                    points: [...currentLapPointsRef.current],
+                    time: finishLapTime,
+                    points: lapPoints,
                     date: Date.now()
                 };
 
                 if (track.type === 'circuit') {
                     // Lap completed
-                    const isNewBest = gpsLapTime < track.bestTime;
-                    const newHistory = [...(track.history || []), gpsLapTime];
+                    const isNewBest = finishLapTime < track.bestTime;
+                    const newHistory = [...(track.history || []), finishLapTime];
                     const newLaps = [...(track.laps || []), newLap];
 
                     if (isNewBest && autoUpdate) {
                         onUpdateTrack({
                             ...track,
-                            bestTime: gpsLapTime,
-                            points: [...currentLapPointsRef.current],
+                            bestTime: finishLapTime,
+                            points: lapPoints,
                             history: newHistory,
                             laps: newLaps,
                             autoUpdateRecord: autoUpdate
@@ -287,25 +341,25 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
                     // Reset for next lap
                     holdSectorDisplayForFiveSeconds();
-                    setStartTime(curr.timestamp);
+                    setStartTime(finishCrossingTime);
                     setCurrentDistance(0);
                     setNextSectorGateIndex(0);
                     setCurrentSectorStartTime(0);
                     resetCurrentLapSectors();
                     projectedDistanceRef.current = 0;
                     const firstPoint = {
-                        lat: curr.lat,
-                        lon: curr.lon,
+                        lat: finishLat,
+                        lon: finishLon,
                         timeOffset: 0,
                         distance: 0,
                         delta: 0,
-                        speed: curr.speed
+                        speed: finishSpeed
                     };
                     currentLapPointsRef.current = [firstPoint];
                     setRecordedPoints([firstPoint]);
                 } else {
                     // Sprint finished
-                    setSprintTime(gpsLapTime);
+                    setSprintTime(finishLapTime);
                     setRaceState('finished');
                     setShowSprintModal(true);
                     

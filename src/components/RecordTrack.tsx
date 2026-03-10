@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
 import { Track, TrackPoint, Gate, Lap } from '../types';
-import { getDistance, formatTime, checkGateCrossing } from '../utils/geo';
+import { getDistance, formatTime, estimateGateCrossingTime } from '../utils/geo';
 import { MapPin, StopCircle, Flag } from 'lucide-react';
 import { TrackMap } from './TrackMap';
 
@@ -117,6 +117,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
 
         let finalPoints = points;
         let finalDistance = totalDistance;
+        let finalLapTime = finalPoints[finalPoints.length - 1].timeOffset;
 
         if (trackType === 'circuit' && points.length > 2) {
             // For circuit recording, cut at the first valid recrossing of start gate
@@ -131,10 +132,30 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                     continue;
                 }
 
-                const crossed = checkGateCrossing(prev.lat, prev.lon, curr.lat, curr.lon, startGate);
-                if (crossed) {
-                    finalPoints = points.slice(0, i + 1);
-                    finalDistance = curr.distance;
+                const crossingTime = estimateGateCrossingTime(
+                    prev.lat,
+                    prev.lon,
+                    prev.timeOffset,
+                    curr.lat,
+                    curr.lon,
+                    curr.timeOffset,
+                    startGate,
+                );
+
+                if (crossingTime !== null) {
+                    const dt = curr.timeOffset - prev.timeOffset;
+                    const ratio = dt <= 0 ? 1 : Math.max(0, Math.min(1, (crossingTime - prev.timeOffset) / dt));
+                    const crossingPoint: TrackPoint = {
+                        lat: prev.lat + (curr.lat - prev.lat) * ratio,
+                        lon: prev.lon + (curr.lon - prev.lon) * ratio,
+                        timeOffset: crossingTime,
+                        distance: prev.distance + (curr.distance - prev.distance) * ratio,
+                        speed: (prev.speed || 0) + ((curr.speed || 0) - (prev.speed || 0)) * ratio,
+                    };
+
+                    finalPoints = [...points.slice(0, i), crossingPoint];
+                    finalDistance = crossingPoint.distance;
+                    finalLapTime = crossingTime;
                     break;
                 }
             }
@@ -150,7 +171,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
             };
         }
 
-        const initialLapTime = finalPoints[finalPoints.length - 1].timeOffset;
+        const initialLapTime = finalLapTime;
         const initialLap: Lap = {
             id: `${Date.now()}-recorded`,
             time: initialLapTime,

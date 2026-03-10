@@ -1,4 +1,4 @@
-import { TrackPoint } from '../types';
+import { Gate, TrackPoint } from '../types';
 
 export const R = 6371000;
 
@@ -57,6 +57,47 @@ export function checkGateCrossing(
         return dot > 0; // Must cross in the correct direction
     }
     return false;
+}
+
+export function estimateGateCrossingTime(
+    prevLat: number,
+    prevLon: number,
+    prevTime: number,
+    currLat: number,
+    currLon: number,
+    currTime: number,
+    gate: Gate,
+): number | null {
+    const p1 = toLocal(prevLat, prevLon, gate.lat, gate.lon);
+    const p2 = toLocal(currLat, currLon, gate.lat, gate.lon);
+    const [g1, g2] = getGateEndpoints(gate.lat, gate.lon, gate.heading, gate.width);
+
+    if (!segmentsIntersect(p1, p2, g1, g2)) {
+        return null;
+    }
+
+    const moveX = p2.x - p1.x;
+    const moveY = p2.y - p1.y;
+    const gateRad = gate.heading * Math.PI / 180;
+    const dirX = Math.sin(gateRad);
+    const dirY = Math.cos(gateRad);
+    const directionDot = moveX * dirX + moveY * dirY;
+
+    // Crossing in reverse direction should not trigger lap timing.
+    if (directionDot <= 0) {
+        return null;
+    }
+
+    // Signed distance to gate line along gate normal (heading direction).
+    const s1 = p1.x * dirX + p1.y * dirY;
+    const s2 = p2.x * dirX + p2.y * dirY;
+    const denom = s1 - s2;
+    if (Math.abs(denom) < 1e-9) {
+        return (prevTime + currTime) / 2;
+    }
+
+    const ratio = Math.max(0, Math.min(1, s1 / denom));
+    return prevTime + ratio * (currTime - prevTime);
 }
 
 export function formatTime(ms: number): string {
