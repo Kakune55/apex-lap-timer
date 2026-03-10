@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
-import { Track, TrackPoint, Gate } from '../types';
+import { Track, TrackPoint, Gate, Lap } from '../types';
 import { getDistance, formatTime, checkGateCrossing } from '../utils/geo';
 import { MapPin, StopCircle, Flag } from 'lucide-react';
 import { TrackMap } from './TrackMap';
@@ -20,8 +20,49 @@ export function RecordTrack({ onSave, onCancel }: Props) {
     const [startGate, setStartGate] = useState<Gate | null>(null);
     const [startTime, setStartTime] = useState<number>(0);
     const [totalDistance, setTotalDistance] = useState(0);
+    const [elapsedMs, setElapsedMs] = useState(0);
+    const [displaySpeedKmh, setDisplaySpeedKmh] = useState(0);
 
     const prevGpsRef = useRef(gps);
+
+    const targetSpeedKmh = (gps?.speed || 0) * 3.6;
+
+    useEffect(() => {
+        let frameId = 0;
+        const from = displaySpeedKmh;
+        const to = targetSpeedKmh;
+        const durationMs = 220;
+        const startedAt = performance.now();
+
+        const animate = (now: number) => {
+            const t = Math.min(1, (now - startedAt) / durationMs);
+            // Ease-out to keep speed digits lively but readable.
+            const eased = 1 - Math.pow(1 - t, 3);
+            setDisplaySpeedKmh(from + (to - from) * eased);
+            if (t < 1) {
+                frameId = requestAnimationFrame(animate);
+            }
+        };
+
+        frameId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(frameId);
+    }, [targetSpeedKmh]);
+
+    useEffect(() => {
+        if (step !== 'recording') {
+            setElapsedMs(0);
+            return;
+        }
+
+        let frameId = 0;
+        const tick = () => {
+            setElapsedMs(Math.max(0, Date.now() - startTime));
+            frameId = requestAnimationFrame(tick);
+        };
+
+        frameId = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(frameId);
+    }, [step, startTime]);
 
     useEffect(() => {
         if (!gps) return;
@@ -41,7 +82,8 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                     lat: gps.lat,
                     lon: gps.lon,
                     timeOffset: 0,
-                    distance: 0
+                    distance: 0,
+                    speed: gps.speed,
                 }]);
                 setStep('recording');
             }
@@ -56,7 +98,8 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                         lat: gps.lat,
                         lon: gps.lon,
                         timeOffset: gps.timestamp - startTime,
-                        distance: newTotalDist
+                        distance: newTotalDist,
+                        speed: gps.speed,
                     }]);
                 }
             }
@@ -107,6 +150,14 @@ export function RecordTrack({ onSave, onCancel }: Props) {
             };
         }
 
+        const initialLapTime = finalPoints[finalPoints.length - 1].timeOffset;
+        const initialLap: Lap = {
+            id: `${Date.now()}-recorded`,
+            time: initialLapTime,
+            points: finalPoints,
+            date: Date.now(),
+        };
+
         const newTrack: Track = {
             id: Date.now().toString(),
             name: trackName,
@@ -115,8 +166,9 @@ export function RecordTrack({ onSave, onCancel }: Props) {
             finishGate,
             points: finalPoints,
             totalDistance: finalDistance,
-            bestTime: finalPoints[finalPoints.length - 1].timeOffset,
-            history: [finalPoints[finalPoints.length - 1].timeOffset],
+            bestTime: initialLapTime,
+            history: [initialLapTime],
+            laps: [initialLap],
             autoUpdateRecord: true
         };
         onSave(newTrack);
@@ -213,7 +265,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                         <h3 className="text-2xl font-bold mb-3 drop-shadow-lg">Drive to Set Start</h3>
                         <p className="text-text-secondary max-w-62.5 drop-shadow-md">Accelerate past 10km/h to automatically set the start line heading.</p>
                         <div className="mt-8 text-5xl font-sans tabular-nums font-bold drop-shadow-xl bg-black/20 px-6 py-4 rounded-3xl backdrop-blur-md">
-                            {Math.round((gps?.speed || 0) * 3.6)} <span className="text-lg text-text-secondary font-sans">km/h</span>
+                            {displaySpeedKmh.toFixed(1)} <span className="text-lg text-text-secondary font-sans">km/h</span>
                         </div>
                         {!gps && (
                             <button
@@ -234,9 +286,12 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-accent-red"></div> Recording
                                 </div>
                                 <div className="text-5xl sm:text-6xl font-bold font-sans tabular-nums mb-1 sm:mb-2 tracking-tighter">
-                                    {formatTime(gps ? gps.timestamp - startTime : 0)}
+                                    {formatTime(elapsedMs)}
                                 </div>
-                                <div className="text-lg sm:text-xl text-text-secondary font-sans tabular-nums font-medium">
+                                <div className="text-2xl sm:text-3xl text-white font-sans tabular-nums font-bold tracking-tight mb-1">
+                                    {displaySpeedKmh.toFixed(1)} <span className="text-base sm:text-lg text-text-secondary font-medium">km/h</span>
+                                </div>
+                                <div className="text-base sm:text-lg text-text-secondary font-sans tabular-nums font-medium">
                                     {(totalDistance / 1000).toFixed(2)} km
                                 </div>
                             </div>
