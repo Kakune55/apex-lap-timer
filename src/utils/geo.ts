@@ -23,7 +23,8 @@ export function toLocal(lat: number, lon: number, centerLat: number, centerLon: 
 }
 
 export function segmentsIntersect(p1: {x:number, y:number}, p2: {x:number, y:number}, p3: {x:number, y:number}, p4: {x:number, y:number}) {
-    const ccw = (A: any, B: any, C: any) => (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+    const ccw = (A: {x:number, y:number}, B: {x:number, y:number}, C: {x:number, y:number}) =>
+        (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
     return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
 }
 
@@ -38,25 +39,13 @@ export function getGateEndpoints(lat: number, lon: number, heading: number, widt
     ];
 }
 
-export function checkGateCrossing(
-    prevLat: number, prevLon: number,
-    currLat: number, currLon: number,
-    gate: {lat: number, lon: number, heading: number, width: number}
-): boolean {
-    const p1 = toLocal(prevLat, prevLon, gate.lat, gate.lon);
-    const p2 = toLocal(currLat, currLon, gate.lat, gate.lon);
-    const [g1, g2] = getGateEndpoints(gate.lat, gate.lon, gate.heading, gate.width);
-
-    if (segmentsIntersect(p1, p2, g1, g2)) {
-        const moveX = p2.x - p1.x;
-        const moveY = p2.y - p1.y;
-        const gateRad = gate.heading * Math.PI / 180;
-        const dirX = Math.sin(gateRad);
-        const dirY = Math.cos(gateRad);
-        const dot = moveX * dirX + moveY * dirY;
-        return dot > 0; // Must cross in the correct direction
+export function getTimeInterpolationRatio(startTime: number, endTime: number, targetTime: number): number {
+    const dt = endTime - startTime;
+    if (dt <= 0) {
+        return 1;
     }
-    return false;
+    const ratio = (targetTime - startTime) / dt;
+    return Math.max(0, Math.min(1, ratio));
 }
 
 export function estimateGateCrossingTime(

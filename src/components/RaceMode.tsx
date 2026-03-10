@@ -1,7 +1,15 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
 import { Track, TrackPoint, Lap } from '../types';
-import { getDistance, estimateGateCrossingTime, formatTime, formatDelta, getExpectedTime, projectToTrackDistance } from '../utils/geo';
+import {
+    getDistance,
+    estimateGateCrossingTime,
+    formatTime,
+    formatDelta,
+    getExpectedTime,
+    projectToTrackDistance,
+    getTimeInterpolationRatio,
+} from '../utils/geo';
 import { ChevronLeft } from 'lucide-react';
 import { TrackMap } from './TrackMap';
 import { MapViewMode } from '../utils/map';
@@ -35,6 +43,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const [displaySectorDeltas, setDisplaySectorDeltas] = useState<Array<number | null>>([null, null, null]);
     const [isSectorDisplayFrozen, setIsSectorDisplayFrozen] = useState(false);
     const currentLapPointsRef = useRef<TrackPoint[]>([]);
+    const lastSprintLapRef = useRef<Lap | null>(null);
     const projectedDistanceRef = useRef(0);
     const currentLapSectorDeltasRef = useRef<Array<number | null>>([null, null, null]);
     const freezeTimeoutRef = useRef<number | null>(null);
@@ -170,8 +179,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             );
 
             if (startCrossingTime !== null) {
-                const startDt = curr.timestamp - prev.timestamp;
-                const startRatio = startDt <= 0 ? 1 : Math.max(0, Math.min(1, (startCrossingTime - prev.timestamp) / startDt));
+                const startRatio = getTimeInterpolationRatio(prev.timestamp, curr.timestamp, startCrossingTime);
                 const startLat = prev.lat + (curr.lat - prev.lat) * startRatio;
                 const startLon = prev.lon + (curr.lon - prev.lon) * startRatio;
                 const startSpeed = prev.speed + (curr.speed - prev.speed) * startRatio;
@@ -282,8 +290,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
             if (finishCrossingTime !== null) {
                 const finishLapTime = Math.max(0, finishCrossingTime - startTime);
-                const finishDt = curr.timestamp - prev.timestamp;
-                const finishRatio = finishDt <= 0 ? 1 : Math.max(0, Math.min(1, (finishCrossingTime - prev.timestamp) / finishDt));
+                const finishRatio = getTimeInterpolationRatio(prev.timestamp, curr.timestamp, finishCrossingTime);
                 const finishLat = prev.lat + (curr.lat - prev.lat) * finishRatio;
                 const finishLon = prev.lon + (curr.lon - prev.lon) * finishRatio;
                 const finishSpeed = prev.speed + (curr.speed - prev.speed) * finishRatio;
@@ -309,7 +316,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 ];
 
                 const newLap: Lap = {
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: crypto.randomUUID(),
                     time: finishLapTime,
                     points: lapPoints,
                     date: Date.now()
@@ -362,9 +369,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     setSprintTime(finishLapTime);
                     setRaceState('finished');
                     setShowSprintModal(true);
-                    
-                    // Store the finished lap points in a ref to use in modal save
-                    (window as any)._lastSprintLap = newLap;
+                    lastSprintLapRef.current = newLap;
                 }
             }
         }
@@ -425,6 +430,29 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         const modes: MapViewMode[] = ['dt-absolute', 'dt-trend', 'speed-heatmap'];
         const nextIndex = (modes.indexOf(mapMode) + 1) % modes.length;
         setMapMode(modes[nextIndex]);
+    };
+
+    const saveSprintResult = (updateBest: boolean) => {
+        const lastLap = lastSprintLapRef.current;
+        if (!lastLap) {
+            onBack();
+            return;
+        }
+
+        const nextTrack: Track = {
+            ...track,
+            history: [...(track.history || []), sprintTime],
+            laps: [...(track.laps || []), lastLap],
+            ...(updateBest
+                ? {
+                      bestTime: sprintTime,
+                      points: [...currentLapPointsRef.current],
+                  }
+                : {}),
+        };
+
+        onUpdateTrack(nextTrack);
+        onBack();
     };
 
     return (
@@ -596,31 +624,13 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                 </p>
                                 <div className="flex gap-4">
                                     <button
-                                        onClick={() => {
-                                            const lastLap = (window as any)._lastSprintLap as Lap;
-                                            onUpdateTrack({
-                                                ...track,
-                                                bestTime: sprintTime,
-                                                points: [...currentLapPointsRef.current],
-                                                history: [...(track.history || []), sprintTime],
-                                                laps: [...(track.laps || []), lastLap]
-                                            });
-                                            onBack();
-                                        }}
+                                        onClick={() => saveSprintResult(true)}
                                         className="flex-1 apex-btn-primary py-3"
                                     >
                                         Update
                                     </button>
                                     <button
-                                        onClick={() => {
-                                            const lastLap = (window as any)._lastSprintLap as Lap;
-                                            onUpdateTrack({
-                                                ...track,
-                                                history: [...(track.history || []), sprintTime],
-                                                laps: [...(track.laps || []), lastLap]
-                                            });
-                                            onBack();
-                                        }}
+                                        onClick={() => saveSprintResult(false)}
                                         className="flex-1 bg-white/10 text-white font-bold py-3 rounded-xl hover:bg-white/20 transition-colors"
                                     >
                                         Skip
@@ -633,15 +643,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                     Slower than Best ({formatTime(track.bestTime)})
                                 </div>
                                 <button
-                                    onClick={() => {
-                                        const lastLap = (window as any)._lastSprintLap as Lap;
-                                        onUpdateTrack({
-                                            ...track,
-                                            history: [...(track.history || []), sprintTime],
-                                            laps: [...(track.laps || []), lastLap]
-                                        });
-                                        onBack();
-                                    }}
+                                    onClick={() => saveSprintResult(false)}
                                     className="w-full apex-btn-primary py-3"
                                 >
                                     Continue

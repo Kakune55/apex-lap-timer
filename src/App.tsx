@@ -326,7 +326,7 @@ export default function App() {
             {isSettingsOpen && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}>
                     <div
-                        className="absolute top-[calc(var(--safe-top)+3.5rem)] left-4 right-4 sm:left-6 sm:right-auto sm:w-[360px] apex-panel rounded-3xl p-5"
+                        className="absolute top-[calc(var(--safe-top)+3.5rem)] left-4 right-4 sm:left-6 sm:right-auto sm:w-90 apex-panel rounded-3xl p-5"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4">
@@ -352,7 +352,7 @@ export default function App() {
                                     value={gpsHz}
                                     disabled={!gpsRateSupported}
                                     onChange={(e) => handleSetGpsHz(Number(e.target.value))}
-                                    className="w-full accent-[var(--accent-green)] disabled:opacity-40"
+                                    className="w-full accent-(--accent-green) disabled:opacity-40"
                                 />
                                 <p className="text-[10px] text-text-secondary">
                                     {gpsRateSupported ? 'Applied immediately. Real GPS rate may still be capped by device/browser (often around 1Hz).' : 'Not supported on this device/browser.'}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
 import { Track, TrackPoint, Gate, Lap } from '../types';
-import { getDistance, formatTime, estimateGateCrossingTime } from '../utils/geo';
+import { getDistance, formatTime, estimateGateCrossingTime, getTimeInterpolationRatio } from '../utils/geo';
 import { MapPin, StopCircle, Flag } from 'lucide-react';
 import { TrackMap } from './TrackMap';
 
@@ -143,8 +143,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                 );
 
                 if (crossingTime !== null) {
-                    const dt = curr.timeOffset - prev.timeOffset;
-                    const ratio = dt <= 0 ? 1 : Math.max(0, Math.min(1, (crossingTime - prev.timeOffset) / dt));
+                    const ratio = getTimeInterpolationRatio(prev.timeOffset, curr.timeOffset, crossingTime);
                     const crossingPoint: TrackPoint = {
                         lat: prev.lat + (curr.lat - prev.lat) * ratio,
                         lon: prev.lon + (curr.lon - prev.lon) * ratio,
