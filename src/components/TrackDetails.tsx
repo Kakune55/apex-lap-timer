@@ -4,7 +4,7 @@ import { TrackMap } from './TrackMap';
 import { formatTime, projectToTrackDistance } from '../utils/geo';
 import { ArrowLeft, History, Map as MapIcon, Trophy, Ruler, Edit3, X, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapViewMode } from '../utils/map';
+import { MapViewMode, getNextMapViewMode } from '../utils/map';
 import { MapModeToggle } from './MapModeToggle';
 import { LapAnalysisCharts } from './LapAnalysisCharts';
 
@@ -187,9 +187,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     };
 
     const toggleMapMode = () => {
-        const modes: MapViewMode[] = ['dt-absolute', 'dt-trend', 'speed-heatmap'];
-        const nextIndex = (modes.indexOf(mapMode) + 1) % modes.length;
-        setMapMode(modes[nextIndex]);
+        setMapMode((prevMode) => getNextMapViewMode(prevMode));
     };
 
     const confirmDeleteLap = () => {
@@ -229,6 +227,11 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
             setSelectedLap(null);
         }
         setPendingDeleteLap(null);
+    };
+
+    const formatLapDateTime = (timestamp: number) => {
+        const date = new Date(timestamp);
+        return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     };
 
     const displayedPoints = selectedLap ? selectedLap.points : track.points;
@@ -349,9 +352,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                                 <span className={`font-sans font-bold tabular-nums ${lap.time === track.bestTime ? 'text-accent-green' : ''}`}>
                                                     {formatTime(lap.time)}
                                                 </span>
-                                                <span className="text-[9px] text-text-secondary font-medium">
-                                                    {new Date(lap.date).toLocaleDateString()} {new Date(lap.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
+                                                <span className="text-[9px] text-text-secondary font-medium">{formatLapDateTime(lap.date)}</span>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -425,39 +426,37 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                     <div className="text-xs text-text-secondary italic">No sectors defined</div>
                                 ) : (
                                     <div className="space-y-2">
-                                        {track.sectors.map((s, i) => (
-                                            <div key={i} className="bg-white/5 p-2 rounded-lg text-sm space-y-1.5">
-                                                <div className="flex justify-between items-center">
-                                                    <span>{s.name || `Sector ${i + 1}`}</span>
-                                                    {isEditingSectors && <X size={14} className="text-accent-red cursor-pointer" onClick={() => removeSector(i)} />}
+                                        {track.sectors.map((s, i) => {
+                                            const bounds = getSectorSliderBounds(i);
+                                            return (
+                                                <div key={i} className="bg-white/5 p-2 rounded-lg text-sm space-y-1.5">
+                                                    <div className="flex justify-between items-center">
+                                                        <span>{s.name || `Sector ${i + 1}`}</span>
+                                                        {isEditingSectors && <X size={14} className="text-accent-red cursor-pointer" onClick={() => removeSector(i)} />}
+                                                    </div>
+                                                    {isEditingSectors ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="number"
+                                                                min={(bounds.min / 1000).toFixed(2)}
+                                                                max={(bounds.max / 1000).toFixed(2)}
+                                                                step="0.01"
+                                                                value={((sectorDistances[i] ?? 0) / 1000).toFixed(2)}
+                                                                onChange={(e) => {
+                                                                    const km = Number(e.target.value);
+                                                                    if (!Number.isFinite(km)) {
+                                                                        return;
+                                                                    }
+                                                                    updateSectorDistance(i, km * 1000);
+                                                                }}
+                                                                className="w-20 px-2 py-1 rounded-md bg-black/25 border border-white/10 text-right tabular-nums"
+                                                            />
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-widest">km</span>
+                                                        </div>
+                                                    ) : null}
                                                 </div>
-                                                {isEditingSectors && (
-                                                    (() => {
-                                                        const bounds = getSectorSliderBounds(i);
-                                                        return (
-                                                            <div className="flex items-center gap-2">
-                                                                <input
-                                                                    type="number"
-                                                                    min={(bounds.min / 1000).toFixed(2)}
-                                                                    max={(bounds.max / 1000).toFixed(2)}
-                                                                    step="0.01"
-                                                                    value={((sectorDistances[i] ?? 0) / 1000).toFixed(2)}
-                                                                    onChange={(e) => {
-                                                                        const km = Number(e.target.value);
-                                                                        if (!Number.isFinite(km)) {
-                                                                            return;
-                                                                        }
-                                                                        updateSectorDistance(i, km * 1000);
-                                                                    }}
-                                                                    className="w-20 px-2 py-1 rounded-md bg-black/25 border border-white/10 text-right tabular-nums"
-                                                                />
-                                                                <span className="text-[10px] text-text-secondary uppercase tracking-widest">km</span>
-                                                            </div>
-                                                        );
-                                                    })()
-                                                )}
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

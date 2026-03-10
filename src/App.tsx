@@ -198,6 +198,11 @@ export default function App() {
         setView('details');
     };
 
+    const handleBackToHome = () => {
+        setView('home');
+        setSelectedTrack(null);
+    };
+
     const handleUpdateTrack = (updatedTrack: Track) => {
         const next = { ...updatedTrack, updatedAt: Date.now() };
         const newTracks = tracksRef.current.map((t) => (t.id === next.id ? next : t));
@@ -300,26 +305,20 @@ export default function App() {
             {view === 'record' && (
                 <RecordTrack
                     onSave={handleSaveTrack}
-                    onCancel={() => setView('home')}
+                    onCancel={handleBackToHome}
                 />
             )}
             {view === 'details' && selectedTrack && (
                 <TrackDetails
                     track={selectedTrack}
-                    onBack={() => {
-                        setView('home');
-                        setSelectedTrack(null);
-                    }}
+                    onBack={handleBackToHome}
                     onUpdateTrack={handleUpdateTrack}
                 />
             )}
             {view === 'race' && selectedTrack && (
                 <RaceMode
                     track={selectedTrack}
-                    onBack={() => {
-                        setView('home');
-                        setSelectedTrack(null);
-                    }}
+                    onBack={handleBackToHome}
                     onUpdateTrack={handleUpdateTrack}
                 />
             )}
@@ -352,7 +351,7 @@ export default function App() {
                                     value={gpsHz}
                                     disabled={!gpsRateSupported}
                                     onChange={(e) => handleSetGpsHz(Number(e.target.value))}
-                                    className="w-full accent-(--accent-green) disabled:opacity-40"
+                                    className="w-full accent-[--accent-green] disabled:opacity-40"
                                 />
                                 <p className="text-[10px] text-text-secondary">
                                     {gpsRateSupported ? 'Applied immediately. Real GPS rate may still be capped by device/browser (often around 1Hz).' : 'Not supported on this device/browser.'}

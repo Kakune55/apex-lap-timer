@@ -12,7 +12,7 @@ import {
 } from '../utils/geo';
 import { ChevronLeft } from 'lucide-react';
 import { TrackMap } from './TrackMap';
-import { MapViewMode } from '../utils/map';
+import { MapViewMode, getNextMapViewMode } from '../utils/map';
 import { MapModeToggle } from './MapModeToggle';
 
 interface Props {
@@ -427,9 +427,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     };
 
     const toggleMapMode = () => {
-        const modes: MapViewMode[] = ['dt-absolute', 'dt-trend', 'speed-heatmap'];
-        const nextIndex = (modes.indexOf(mapMode) + 1) % modes.length;
-        setMapMode(modes[nextIndex]);
+        setMapMode((prevMode) => getNextMapViewMode(prevMode));
     };
 
     const saveSprintResult = (updateBest: boolean) => {

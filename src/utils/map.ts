@@ -2,6 +2,13 @@ import { TrackPoint } from '../types';
 
 export type MapViewMode = 'dt-absolute' | 'dt-trend' | 'speed-heatmap';
 
+export const MAP_VIEW_MODES: MapViewMode[] = ['dt-absolute', 'dt-trend', 'speed-heatmap'];
+
+export function getNextMapViewMode(currentMode: MapViewMode): MapViewMode {
+    const nextIndex = (MAP_VIEW_MODES.indexOf(currentMode) + 1) % MAP_VIEW_MODES.length;
+    return MAP_VIEW_MODES[nextIndex];
+}
+
 export interface ColoredSegment {
     points: [number, number][];
     color: string;
