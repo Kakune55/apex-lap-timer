@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
 import { Track, TrackPoint, Gate } from '../types';
-import { getDistance, formatTime } from '../utils/geo';
+import { getDistance, formatTime, checkGateCrossing } from '../utils/geo';
 import { MapPin, StopCircle, Flag } from 'lucide-react';
 import { TrackMap } from './TrackMap';
 
@@ -72,6 +72,31 @@ export function RecordTrack({ onSave, onCancel }: Props) {
     const handleStop = () => {
         if (!startGate || points.length === 0) return;
 
+        let finalPoints = points;
+        let finalDistance = totalDistance;
+
+        if (trackType === 'circuit' && points.length > 2) {
+            // For circuit recording, cut at the first valid recrossing of start gate
+            // so totalDistance reflects one clean lap instead of manual stop distance.
+            const minLapDistance = 20;
+            const minLapTime = 10000;
+            for (let i = 1; i < points.length; i++) {
+                const prev = points[i - 1];
+                const curr = points[i];
+
+                if (curr.distance < minLapDistance || curr.timeOffset < minLapTime) {
+                    continue;
+                }
+
+                const crossed = checkGateCrossing(prev.lat, prev.lon, curr.lat, curr.lon, startGate);
+                if (crossed) {
+                    finalPoints = points.slice(0, i + 1);
+                    finalDistance = curr.distance;
+                    break;
+                }
+            }
+        }
+
         let finishGate = startGate;
         if (trackType === 'sprint' && gps) {
             finishGate = {
@@ -88,10 +113,10 @@ export function RecordTrack({ onSave, onCancel }: Props) {
             type: trackType,
             startGate,
             finishGate,
-            points,
-            totalDistance,
-            bestTime: points[points.length - 1].timeOffset,
-            history: [points[points.length - 1].timeOffset],
+            points: finalPoints,
+            totalDistance: finalDistance,
+            bestTime: finalPoints[finalPoints.length - 1].timeOffset,
+            history: [finalPoints[finalPoints.length - 1].timeOffset],
             autoUpdateRecord: true
         };
         onSave(newTrack);

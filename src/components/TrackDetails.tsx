@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Track, Lap, TrackPoint } from '../types';
 import { TrackMap } from './TrackMap';
 import { formatTime, projectToTrackDistance } from '../utils/geo';
-import { ArrowLeft, History, Map as MapIcon, Trophy, Ruler, Edit3, X, Plus } from 'lucide-react';
+import { ArrowLeft, History, Map as MapIcon, Trophy, Ruler, Edit3, X, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapViewMode } from '../utils/map';
 import { MapModeToggle } from './MapModeToggle';
@@ -21,6 +21,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     const [mapMode, setMapMode] = useState<MapViewMode>('dt-absolute');
     const [isEditingSectors, setIsEditingSectors] = useState(false);
     const [visibleLapCount, setVisibleLapCount] = useState(LAP_HISTORY_BATCH);
+    const [pendingDeleteLap, setPendingDeleteLap] = useState<Lap | null>(null);
 
     const reversedLaps = useMemo(() => [...(track.laps ?? [])].reverse(), [track.laps]);
     const displayedLaps = useMemo(
@@ -191,6 +192,45 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
         setMapMode(modes[nextIndex]);
     };
 
+    const confirmDeleteLap = () => {
+        if (!pendingDeleteLap) {
+            return;
+        }
+
+        const currentLaps = track.laps || [];
+        const nextLaps = currentLaps.filter((lap) => lap.id !== pendingDeleteLap.id);
+        const nextHistory = nextLaps.map((lap) => lap.time);
+
+        let nextBestTime = track.bestTime;
+        let nextPoints = track.points;
+        let nextTotalDistance = track.totalDistance;
+
+        if (nextLaps.length > 0) {
+            const nextBestLap = nextLaps.reduce((best, lap) => (lap.time < best.time ? lap : best), nextLaps[0]);
+            nextBestTime = nextBestLap.time;
+            nextPoints = nextBestLap.points;
+            const lapDistance = nextBestLap.points[nextBestLap.points.length - 1]?.distance;
+            if (Number.isFinite(lapDistance)) {
+                nextTotalDistance = Math.max(0, lapDistance || 0);
+            }
+        }
+
+        const updatedTrack: Track = {
+            ...track,
+            bestTime: nextBestTime,
+            points: nextPoints,
+            totalDistance: nextTotalDistance,
+            history: nextHistory,
+            laps: nextLaps,
+        };
+
+        onUpdateTrack(updatedTrack);
+        if (selectedLap?.id === pendingDeleteLap.id) {
+            setSelectedLap(null);
+        }
+        setPendingDeleteLap(null);
+    };
+
     const displayedPoints = selectedLap ? selectedLap.points : track.points;
     return (
         <div className="relative h-full flex flex-col bg-bg-color text-white overflow-hidden">
@@ -319,6 +359,16 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                                 <span className="text-[10px] font-bold bg-accent-green/20 text-accent-green px-2 py-0.5 rounded-full uppercase tracking-wider">Record</span>
                                             )}
                                             <Edit3 size={14} className="text-white/20" />
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setPendingDeleteLap(lap);
+                                                }}
+                                                className="p-1.5 rounded-full text-text-secondary hover:text-accent-red hover:bg-accent-red/10 transition-colors"
+                                                title="Delete this lap"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
                                         </div>
                                     </motion.div>
                                 ))}
@@ -415,6 +465,29 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     </div>
                 </div>
             </div>
+            {pendingDeleteLap && (
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPendingDeleteLap(null)}>
+                    <div className="apex-panel w-full max-w-sm rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">Delete Lap Record</div>
+                        <div className="text-lg font-semibold mb-1">{formatTime(pendingDeleteLap.time)}</div>
+                        <p className="text-sm text-text-secondary mb-5">This lap will be removed permanently from history.</p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setPendingDeleteLap(null)}
+                                className="flex-1 apex-btn-secondary py-2.5 rounded-xl"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDeleteLap}
+                                className="flex-1 py-2.5 rounded-xl font-bold bg-accent-red/90 text-white hover:bg-accent-red transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
