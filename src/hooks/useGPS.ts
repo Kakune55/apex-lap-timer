@@ -15,12 +15,32 @@ let globalData: GPSData | null = null;
 let globalError: string | null = null;
 let simSpeedKmh = 72; // Default 72 km/h
 const listeners = new Set<() => void>();
+const GPS_RATE_MIN = 0.2;
+const GPS_RATE_MAX = 2;
+const GPS_RATE_STORAGE_KEY = 'apex_gps_refresh_hz';
+
+const clampGPSRate = (value: number) => Math.max(GPS_RATE_MIN, Math.min(GPS_RATE_MAX, value));
+
+const loadInitialGPSRate = () => {
+    if (typeof window === 'undefined') {
+        return 1;
+    }
+
+    const saved = window.localStorage.getItem(GPS_RATE_STORAGE_KEY);
+    const parsed = saved ? Number(saved) : NaN;
+    if (!Number.isFinite(parsed)) {
+        return 1;
+    }
+    return clampGPSRate(parsed);
+};
 
 const notify = () => listeners.forEach(l => l());
 
 let simInterval: number | null = null;
 let watchId: number | null = null;
 let currentAngle = 0; // Keep track of angle so speed changes don't jump position
+let gpsRefreshRateHz = loadInitialGPSRate();
+let lastRealGPSUpdateAt = 0;
 
 const hasSecureLocationContext = () => {
     const host = window.location.hostname;
@@ -53,6 +73,7 @@ const startSimulation = () => {
     const radius = 200; // 200m radius
     let lastTime = Date.now();
 
+    const intervalMs = 1000 / gpsRefreshRateHz;
     simInterval = window.setInterval(() => {
         const now = Date.now();
         const dt = (now - lastTime) / 1000;
@@ -80,7 +101,7 @@ const startSimulation = () => {
         };
         globalError = null;
         notify();
-    }, 1000); // 1Hz update rate
+    }, intervalMs);
 };
 
 const stopSimulation = () => {
@@ -95,6 +116,7 @@ const stopRealGPS = () => {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
     }
+    lastRealGPSUpdateAt = 0;
 };
 
 const startRealGPS = () => {
@@ -113,6 +135,11 @@ const startRealGPS = () => {
 
     watchId = navigator.geolocation.watchPosition(
         (position) => {
+            const minUpdateIntervalMs = 1000 / gpsRefreshRateHz;
+            if (lastRealGPSUpdateAt > 0 && position.timestamp - lastRealGPSUpdateAt < minUpdateIntervalMs) {
+                return;
+            }
+
             globalData = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude,
@@ -121,6 +148,7 @@ const startRealGPS = () => {
                 accuracy: position.coords.accuracy,
                 timestamp: position.timestamp,
             };
+            lastRealGPSUpdateAt = position.timestamp;
             globalError = null;
             notify();
         },
@@ -181,6 +209,33 @@ export const retryGPS = () => {
     notify();
 };
 
+export const isGPSRefreshRateSupported = () => {
+    if (typeof navigator === 'undefined') {
+        return false;
+    }
+    return 'geolocation' in navigator;
+};
+
+export const getGPSRefreshRateHz = () => gpsRefreshRateHz;
+
+export const setGPSRefreshRateHz = (hz: number) => {
+    gpsRefreshRateHz = clampGPSRate(hz);
+    if (typeof window !== 'undefined') {
+        window.localStorage.setItem(GPS_RATE_STORAGE_KEY, String(gpsRefreshRateHz));
+    }
+
+    // Rebind active source so the new refresh rate is applied immediately.
+    if (isSimulating) {
+        stopSimulation();
+        startSimulation();
+    } else {
+        stopRealGPS();
+        startRealGPS();
+    }
+
+    notify();
+};
+
 export const toggleSimulation = () => {
     isSimulating = !isSimulating;
     if (isSimulating) {
@@ -202,7 +257,8 @@ export function useGPS() {
         data: globalData,
         error: globalError,
         simMode: isSimulating,
-        simSpeed: simSpeedKmh
+        simSpeed: simSpeedKmh,
+        gpsRefreshRateHz,
     });
 
     useEffect(() => {
@@ -211,7 +267,8 @@ export function useGPS() {
                 data: globalData,
                 error: globalError,
                 simMode: isSimulating,
-                simSpeed: simSpeedKmh
+                simSpeed: simSpeedKmh,
+                gpsRefreshRateHz,
             });
         };
         listeners.add(handleUpdate);
@@ -230,10 +287,12 @@ export function useGPS() {
         error: state.error,
         simMode: state.simMode,
         simSpeed: state.simSpeed,
+        gpsRefreshRateHz: state.gpsRefreshRateHz,
         requestPermission: requestGPSPermission,
         retryGPS,
         toggleSimulation,
-        setSimulationSpeed
+        setSimulationSpeed,
+        setGPSRefreshRateHz,
     };
 }
 

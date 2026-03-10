@@ -4,8 +4,8 @@ import { TrackList } from './components/TrackList';
 import { RecordTrack } from './components/RecordTrack';
 import { RaceMode } from './components/RaceMode';
 import { TrackDetails } from './components/TrackDetails';
-import { useGPS } from './hooks/useGPS';
-import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
+import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
 
 function DevTools() {
@@ -80,6 +80,17 @@ export default function App() {
     const syncRef = useRef<ReturnType<typeof createCloudSync> | null>(null);
     const hideSyncTimeoutRef = useRef<number | null>(null);
     const [showSyncIndicator, setShowSyncIndicator] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [gpsHz, setGpsHz] = useState(getGPSRefreshRateHz());
+    const [debugEnabled, setDebugEnabled] = useState(() => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+        const queryDebug = new URLSearchParams(window.location.search).get('debug') === 'true';
+        const savedDebug = window.localStorage.getItem('apex_debug') === 'true';
+        return queryDebug || savedDebug;
+    });
+    const [pendingDeleteTrack, setPendingDeleteTrack] = useState<Track | null>(null);
 
     const normalizeTracks = (incoming: Track[]) => {
         const now = Date.now();
@@ -163,9 +174,18 @@ export default function App() {
         setView('home');
     };
 
-    const handleDeleteTrack = (id: string) => {
+    const requestDeleteTrack = (track: Track) => {
+        setPendingDeleteTrack(track);
+    };
+
+    const confirmDeleteTrack = () => {
+        if (!pendingDeleteTrack) {
+            return;
+        }
+        const id = pendingDeleteTrack.id;
         persistTracks(tracksRef.current.filter((t) => t.id !== id));
         syncRef.current?.queueDelete(id, Date.now());
+        setPendingDeleteTrack(null);
     };
 
     const handleSelectTrack = (track: Track) => {
@@ -239,8 +259,22 @@ export default function App() {
             ? 'text-rose-300'
             : 'text-emerald-300';
 
-    const debugEnabled =
-        typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === 'true';
+    const handleSetGpsHz = (nextHz: number) => {
+        setGPSRefreshRateHz(nextHz);
+        setGpsHz(getGPSRefreshRateHz());
+    };
+
+    const handleDebugToggle = () => {
+        setDebugEnabled((prev) => {
+            const next = !prev;
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem('apex_debug', String(next));
+            }
+            return next;
+        });
+    };
+
+    const gpsRateSupported = isGPSRefreshRateSupported();
 
     return (
         <div className="h-full bg-bg-color text-white selection:bg-white/20 overflow-hidden">
@@ -257,9 +291,10 @@ export default function App() {
                 <TrackList
                     tracks={tracks}
                     onSelect={handleSelectTrack}
-                    onDelete={handleDeleteTrack}
+                    onDelete={requestDeleteTrack}
                     onViewDetails={handleViewDetails}
                     onCreateNew={() => setView('record')}
+                    onOpenSettings={() => setIsSettingsOpen(true)}
                 />
             )}
             {view === 'record' && (
@@ -287,6 +322,82 @@ export default function App() {
                     }}
                     onUpdateTrack={handleUpdateTrack}
                 />
+            )}
+            {isSettingsOpen && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}>
+                    <div
+                        className="absolute top-[calc(var(--safe-top)+3.5rem)] left-4 right-4 sm:left-6 sm:right-auto sm:w-[360px] apex-panel rounded-3xl p-5"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary flex items-center gap-2">
+                                <Settings size={14} /> Settings
+                            </h3>
+                            <button onClick={() => setIsSettingsOpen(false)} className="p-2 apex-pill hover:bg-white/10 transition-colors">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-5">
+                            <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="text-text-secondary font-bold uppercase tracking-widest text-[10px]">Location Refresh Rate</span>
+                                    <span className="font-sans tabular-nums text-white">{gpsHz.toFixed(1)} Hz</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.2}
+                                    max={2}
+                                    step={0.1}
+                                    value={gpsHz}
+                                    disabled={!gpsRateSupported}
+                                    onChange={(e) => handleSetGpsHz(Number(e.target.value))}
+                                    className="w-full accent-[var(--accent-green)] disabled:opacity-40"
+                                />
+                                <p className="text-[10px] text-text-secondary">
+                                    {gpsRateSupported ? 'Applied immediately. Real GPS rate may still be capped by device/browser (often around 1Hz).' : 'Not supported on this device/browser.'}
+                                </p>
+                            </div>
+
+                            <div className="apex-panel-muted rounded-2xl p-4 flex items-center justify-between">
+                                <div>
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Debug Tools</div>
+                                    <div className="text-xs text-white/80 mt-1">Show simulator and diagnostics panel</div>
+                                </div>
+                                <button
+                                    onClick={handleDebugToggle}
+                                    className={`w-14 h-8 rounded-full border transition-colors ${debugEnabled ? 'bg-accent-green border-accent-green' : 'bg-white/10 border-white/20'}`}
+                                    aria-label="Toggle debug tools"
+                                >
+                                    <span className={`block h-6 w-6 rounded-full bg-white transition-transform ${debugEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {pendingDeleteTrack && (
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPendingDeleteTrack(null)}>
+                    <div className="apex-panel w-full max-w-sm rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">Confirm Delete</div>
+                        <div className="text-lg font-semibold mb-1 truncate">{pendingDeleteTrack.name}</div>
+                        <p className="text-sm text-text-secondary mb-5">This track and its lap history will be removed.</p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setPendingDeleteTrack(null)}
+                                className="flex-1 apex-btn-secondary py-2.5 rounded-xl"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDeleteTrack}
+                                className="flex-1 py-2.5 rounded-xl font-bold bg-accent-red/90 text-white hover:bg-accent-red transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
             {debugEnabled ? <DevTools /> : null}
         </div>

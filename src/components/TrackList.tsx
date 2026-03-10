@@ -1,24 +1,32 @@
 import { Track } from '../types';
-import { Play, Plus, Trash2, History, Info } from 'lucide-react';
+import { Play, Plus, Trash2, History, Info, Settings } from 'lucide-react';
 import { formatTime } from '../utils/geo';
 import { Flag } from 'lucide-react';
 
 interface Props {
     tracks: Track[];
     onSelect: (track: Track) => void;
-    onDelete: (id: string) => void;
+    onDelete: (track: Track) => void;
     onViewDetails: (track: Track) => void;
     onCreateNew: () => void;
+    onOpenSettings: () => void;
 }
 
-export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateNew }: Props) {
+export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateNew, onOpenSettings }: Props) {
     return (
         <div className="p-3 sm:p-6 max-w-3xl mx-auto w-full h-full overflow-y-auto overscroll-y-contain">
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-5 sm:mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Saved Tracks</h1>
+            <div className="flex items-center justify-between mb-5 sm:mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
+                <button
+                    onClick={onOpenSettings}
+                    className="p-3 apex-pill hover:bg-white/10 transition-colors"
+                    title="Settings"
+                >
+                    <Settings size={20} />
+                </button>
+                <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-center">Saved Tracks</h1>
                 <button
                     onClick={onCreateNew}
-                    className="apex-btn-primary px-4 py-2.5 rounded-full flex items-center justify-center gap-2 w-full sm:w-auto"
+                    className="apex-btn-primary px-4 py-2.5 rounded-full flex items-center justify-center gap-2"
                 >
                     <Plus size={18} /> New Track
                 </button>
@@ -58,7 +66,7 @@ export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateN
                                     <Info size={20} />
                                 </button>
                                 <button
-                                    onClick={() => onDelete(track.id)}
+                                    onClick={() => onDelete(track)}
                                     className="p-2.5 sm:p-3 text-text-secondary hover:text-accent-red hover:bg-accent-red/10 rounded-full transition-colors"
                                 >
                                     <Trash2 size={20} />
