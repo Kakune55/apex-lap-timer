@@ -1,4 +1,5 @@
 import { TrackPoint } from '../types';
+import { getDistance } from './geo';
 
 export type MapViewMode = 'dt-absolute' | 'dt-trend' | 'speed-heatmap';
 
@@ -26,18 +27,19 @@ export function getColoredSegments(
 ): ColoredSegment[] {
     if (points.length < 2) return [];
 
-    const speedScale = mode === 'speed-heatmap' ? buildSpeedColorScale(points, maxSpeed) : null;
+    const speedSeries = mode === 'speed-heatmap' ? points.map((point, i) => getPointSpeedKmh(point, points[Math.max(0, i - 1)])) : null;
+    const speedScale = mode === 'speed-heatmap' ? buildSpeedColorScale(speedSeries || [], maxSpeed) : null;
 
     const segments: ColoredSegment[] = [];
     let currentSegment: ColoredSegment = {
         points: [[points[0].lat, points[0].lon]],
-        color: getColorForPoint(points[0], points[0], mode, maxSpeed, speedScale)
+        color: getColorForPoint(points[0], points[0], mode, maxSpeed, speedScale, speedSeries, 0)
     };
 
     for (let i = 1; i < points.length; i++) {
         const prev = points[i - 1];
         const curr = points[i];
-        const color = getColorForPoint(curr, prev, mode, maxSpeed, speedScale);
+        const color = getColorForPoint(curr, prev, mode, maxSpeed, speedScale, speedSeries, i);
 
         if (color === currentSegment.color) {
             currentSegment.points.push([curr.lat, curr.lon]);
@@ -61,7 +63,9 @@ function getColorForPoint(
     prev: TrackPoint, 
     mode: MapViewMode,
     maxSpeed: number,
-    speedScale: SpeedColorScale | null
+    speedScale: SpeedColorScale | null,
+    speedSeries: Array<number | null> | null,
+    pointIndex: number,
 ): string {
     const GREEN = 'var(--accent-green)';
     const RED = 'var(--accent-red)';
@@ -81,9 +85,8 @@ function getColorForPoint(
 
         case 'speed-heatmap':
             // Adaptive multi-stop gradient: slow -> fast
-            if (curr.speed === undefined) return GRAY;
-
-            const speed = curr.speed * 3.6; // Convert to km/h
+            const speed = getSegmentSpeedKmh(curr, prev, speedSeries, pointIndex);
+            if (speed === null) return GRAY;
             const scale = speedScale ?? { minKmh: 0, maxKmh: maxSpeed };
             const span = Math.max(1, scale.maxKmh - scale.minKmh);
             const ratio = clamp01((speed - scale.minKmh) / span);
@@ -94,27 +97,71 @@ function getColorForPoint(
     }
 }
 
+function getPointSpeedKmh(curr: TrackPoint, prev: TrackPoint): number | null {
+    if (curr.speed !== undefined && Number.isFinite(curr.speed) && curr.speed >= 0) {
+        return curr.speed * 3.6;
+    }
+
+    const dtMs = curr.timeOffset - prev.timeOffset;
+    if (dtMs <= 0) {
+        return null;
+    }
+
+    const distMeters = getDistance(prev.lat, prev.lon, curr.lat, curr.lon);
+    if (!Number.isFinite(distMeters) || distMeters < 0) {
+        return null;
+    }
+
+    // Fallback speed estimate from geometry when GPS speed is missing.
+    const speedMs = distMeters / (dtMs / 1000);
+    if (!Number.isFinite(speedMs) || speedMs < 0) {
+        return null;
+    }
+
+    return speedMs * 3.6;
+}
+
 function clamp01(value: number): number {
     if (value < 0) return 0;
     if (value > 1) return 1;
     return value;
 }
 
-function buildSpeedColorScale(points: TrackPoint[], fallbackMaxKmh: number): SpeedColorScale {
-    const speeds = points
-        .map((point) => point.speed)
-        .filter((speed): speed is number => speed !== undefined && Number.isFinite(speed) && speed >= 0)
-        .map((speed) => speed * 3.6)
+function buildSpeedColorScale(speedSeries: Array<number | null>, fallbackMaxKmh: number): SpeedColorScale {
+    const speeds = speedSeries
+        .filter((speed): speed is number => speed !== null && Number.isFinite(speed) && speed >= 0)
         .sort((a, b) => a - b);
 
     if (speeds.length < 3) {
         return { minKmh: 0, maxKmh: fallbackMaxKmh };
     }
 
-    // Use robust percentiles for richer contrast and to avoid single-point outliers.
-    const minKmh = percentile(speeds, 0.05);
-    const maxKmh = Math.max(minKmh + 5, percentile(speeds, 0.95));
+    // Use wider robust bounds plus headroom to avoid long "flat pure color" segments.
+    const pLow = percentile(speeds, 0.02);
+    const pHigh = percentile(speeds, 0.98);
+    const range = Math.max(5, pHigh - pLow);
+    const pad = range * 0.12;
+    const minKmh = Math.max(0, pLow - pad);
+    const maxKmh = Math.max(minKmh + 5, pHigh + pad);
     return { minKmh, maxKmh };
+}
+
+function getSegmentSpeedKmh(
+    curr: TrackPoint,
+    prev: TrackPoint,
+    speedSeries: Array<number | null> | null,
+    pointIndex: number,
+): number | null {
+    if (!speedSeries) {
+        return getPointSpeedKmh(curr, prev);
+    }
+
+    const currSpeed = speedSeries[pointIndex] ?? getPointSpeedKmh(curr, prev);
+    const prevSpeed = speedSeries[pointIndex - 1] ?? getPointSpeedKmh(prev, prev);
+    if (currSpeed !== null && prevSpeed !== null) {
+        return (currSpeed + prevSpeed) / 2;
+    }
+    return currSpeed ?? prevSpeed;
 }
 
 function percentile(sortedValues: number[], q: number): number {
