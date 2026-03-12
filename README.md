@@ -96,9 +96,11 @@ npm run hash-password -- "YOUR_PASSWORD"
 Optional args:
 
 ```txt
-npm run hash-password -- "YOUR_PASSWORD" 120000
-npm run hash-password -- "YOUR_PASSWORD" 120000 aabbccddeeff00112233445566778899
+npm run hash-password -- "YOUR_PASSWORD" 100000
+npm run hash-password -- "YOUR_PASSWORD" 100000 aabbccddeeff00112233445566778899
 ```
+
+Use `100000` iterations for Cloudflare Worker compatibility.
 
 Save the printed `salt`, `iter`, and `hash`.
 
@@ -121,7 +123,7 @@ INSERT INTO users (
 	'local',
 	'<hash>',
 	'<salt>',
-	120000,
+	100000,
 	1,
 	CAST(strftime('%s','now') AS INTEGER) * 1000,
 	CAST(strftime('%s','now') AS INTEGER) * 1000
@@ -136,7 +138,7 @@ Regenerate `hash` + `salt`, then:
 UPDATE users
 SET password_hash = '<new_hash>',
 		password_salt = '<new_salt>',
-		password_iterations = 120000,
+		password_iterations = 100000,
 		updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
 WHERE user_id = 'kaku';
 ```

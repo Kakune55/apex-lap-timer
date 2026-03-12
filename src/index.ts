@@ -25,7 +25,7 @@ type AppVars = {
 const app = new Hono<{ Bindings: AppBindings; Variables: AppVars }>();
 
 const USERS_TABLE_SQL =
-  "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, display_name TEXT, auth_provider TEXT NOT NULL DEFAULT 'local', password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL DEFAULT 120000, is_active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)";
+  "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, display_name TEXT, auth_provider TEXT NOT NULL DEFAULT 'local', password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL DEFAULT 100000, is_active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)";
 const TRACKS_TABLE_SQL =
   "CREATE TABLE IF NOT EXISTS tracks (user_id TEXT NOT NULL, track_id TEXT NOT NULL, data TEXT, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, track_id), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)";
 const SESSIONS_TABLE_SQL =
@@ -37,6 +37,8 @@ const SESSIONS_USER_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_sessions_user ON
 const SESSIONS_EXPIRES_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const PBKDF2_DEFAULT_ITERATIONS = 100000;
+const PBKDF2_MAX_ITERATIONS = 100000;
 
 type AppContext = Context<{ Bindings: AppBindings; Variables: AppVars }>;
 
@@ -256,11 +258,22 @@ app.post("/api/auth/login", async (c) => {
     return unauthorized(c);
   }
 
+  const passwordIterations = Number(user.password_iterations) || PBKDF2_DEFAULT_ITERATIONS;
+  if (passwordIterations > PBKDF2_MAX_ITERATIONS) {
+    return c.json(
+      {
+        ok: false,
+        error: `User password_iterations exceeds Worker PBKDF2 limit (${PBKDF2_MAX_ITERATIONS}). Re-hash with ${PBKDF2_MAX_ITERATIONS}.`,
+      },
+      500,
+    );
+  }
+
   const passwordOk = await verifyPassword(
     password,
     user.password_hash,
     user.password_salt,
-    Number(user.password_iterations) || 120000,
+    passwordIterations,
   );
   if (!passwordOk) {
     return unauthorized(c);

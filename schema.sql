@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   auth_provider TEXT NOT NULL DEFAULT 'local',
   password_hash TEXT NOT NULL,
   password_salt TEXT NOT NULL,
-  password_iterations INTEGER NOT NULL DEFAULT 120000,
+  password_iterations INTEGER NOT NULL DEFAULT 100000,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL

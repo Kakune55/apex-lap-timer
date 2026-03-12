@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
-const DEFAULT_ITERATIONS = 120000;
+const DEFAULT_ITERATIONS = 100000;
+const MAX_ITERATIONS = 100000;
 const KEY_LENGTH = 32;
 const DIGEST = "sha256";
 
@@ -10,8 +11,8 @@ function printUsage() {
   console.log("");
   console.log("Examples:");
   console.log("  node scripts/gen-password-hash.mjs \"MyStrongPass123!\"");
-  console.log("  node scripts/gen-password-hash.mjs \"MyStrongPass123!\" 150000");
-  console.log("  node scripts/gen-password-hash.mjs \"MyStrongPass123!\" 120000 aabbcc...");
+  console.log("  node scripts/gen-password-hash.mjs \"MyStrongPass123!\" 100000");
+  console.log("  node scripts/gen-password-hash.mjs \"MyStrongPass123!\" 100000 aabbcc...");
 }
 
 const [, , passwordArg, iterationsArg, saltArg] = process.argv;
@@ -24,6 +25,10 @@ if (!passwordArg) {
 const iterations = iterationsArg ? Number(iterationsArg) : DEFAULT_ITERATIONS;
 if (!Number.isInteger(iterations) || iterations <= 0) {
   console.error("[error] iterations must be a positive integer");
+  process.exit(1);
+}
+if (iterations > MAX_ITERATIONS) {
+  console.error(`[error] iterations must be <= ${MAX_ITERATIONS} for Cloudflare Worker Web Crypto compatibility`);
   process.exit(1);
 }
 
