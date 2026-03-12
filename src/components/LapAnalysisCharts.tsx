@@ -34,11 +34,36 @@ export function LapAnalysisCharts({ lap }: Props) {
     const chartData = useMemo(() => {
         if (!lap.points || lap.points.length < 3) return [];
 
+        const rawSpeeds = lap.points.map((p) =>
+            typeof p.speed === 'number' && Number.isFinite(p.speed) ? p.speed : undefined,
+        );
+
+        const safeSpeeds = rawSpeeds.map((speed, i) => {
+            if (typeof speed === 'number' && speed > 0.5) {
+                return speed;
+            }
+
+            const prev = i > 0 ? rawSpeeds[i - 1] : undefined;
+            const next = i < rawSpeeds.length - 1 ? rawSpeeds[i + 1] : undefined;
+
+            if (typeof prev === 'number' && prev > 0.5 && typeof next === 'number' && next > 0.5) {
+                return (prev + next) / 2;
+            }
+            if (typeof prev === 'number' && prev > 0.5) {
+                return prev;
+            }
+            if (typeof next === 'number' && next > 0.5) {
+                return next;
+            }
+            return Math.max(0, speed ?? 0);
+        });
+
         return lap.points.map((p, i) => {
+            const pointSpeed = safeSpeeds[i] ?? 0;
             if (i === 0 || i === lap.points.length - 1) {
                 return {
                     distance: Math.round(p.distance),
-                    speed: Math.round((p.speed || 0) * 3.6),
+                    speed: Math.round(pointSpeed * 3.6),
                     longG: 0,
                     latG: 0,
                 };
@@ -46,40 +71,50 @@ export function LapAnalysisCharts({ lap }: Props) {
 
             const prev = lap.points[i - 1];
             const next = lap.points[i + 1];
+            const prevSpeed = safeSpeeds[i - 1] ?? 0;
             
             // 1. Longitudinal G (Speed change)
             let longG = 0;
             const dtLong = (p.timeOffset - prev.timeOffset) / 1000;
-            if (dtLong > 0 && p.speed !== undefined && prev.speed !== undefined) {
-                const dv = p.speed - prev.speed;
+            if (dtLong > 0) {
+                const dv = pointSpeed - prevSpeed;
                 longG = (dv / dtLong) / 9.81;
             }
 
             // 2. Lateral G (Heading change)
             // Use simple Cartesian approximation for local heading
             let latG = 0;
+            const isTerminalDerivativePoint = i <= 1 || i >= lap.points.length - 2;
             const dtLat = (next.timeOffset - prev.timeOffset) / 1000;
-            if (dtLat > 0 && p.speed !== undefined) {
-                const dx1 = (p.lon - prev.lon) * Math.cos(p.lat * Math.PI / 180);
-                const dy1 = (p.lat - prev.lat);
-                const heading1 = Math.atan2(dx1, dy1);
+            if (!isTerminalDerivativePoint && dtLat >= 0.08) {
+                const meterPerDegLat = 111320;
+                const meterPerDegLon = 111320 * Math.cos((p.lat * Math.PI) / 180);
 
-                const dx2 = (next.lon - p.lon) * Math.cos(p.lat * Math.PI / 180);
-                const dy2 = (next.lat - p.lat);
-                const heading2 = Math.atan2(dx2, dy2);
+                const vx1 = (p.lon - prev.lon) * meterPerDegLon;
+                const vy1 = (p.lat - prev.lat) * meterPerDegLat;
+                const vx2 = (next.lon - p.lon) * meterPerDegLon;
+                const vy2 = (next.lat - p.lat) * meterPerDegLat;
 
-                let dHeading = heading2 - heading1;
-                // Normalize to [-PI, PI]
-                while (dHeading > Math.PI) dHeading -= 2 * Math.PI;
-                while (dHeading < -Math.PI) dHeading += 2 * Math.PI;
+                const segLen1 = Math.hypot(vx1, vy1);
+                const segLen2 = Math.hypot(vx2, vy2);
+                if (segLen1 >= 1 && segLen2 >= 1) {
+                    const heading1 = Math.atan2(vx1, vy1);
+                    const heading2 = Math.atan2(vx2, vy2);
 
-                const omega = dHeading / dtLat; // rad/s
-                latG = (p.speed * omega) / 9.81;
+                    let dHeading = heading2 - heading1;
+                    // Normalize to [-PI, PI]
+                    while (dHeading > Math.PI) dHeading -= 2 * Math.PI;
+                    while (dHeading < -Math.PI) dHeading += 2 * Math.PI;
+
+                    const omega = dHeading / dtLat; // rad/s
+                    const rawLatG = (pointSpeed * omega) / 9.81;
+                    latG = Math.max(-3, Math.min(3, rawLatG));
+                }
             }
 
             return {
                 distance: Math.round(p.distance),
-                speed: Math.round((p.speed || 0) * 3.6), // km/h
+                speed: Math.round(pointSpeed * 3.6), // km/h
                 longG: Number(longG.toFixed(2)),
                 latG: Number(latG.toFixed(2)),
                 totalG: Number(Math.sqrt(longG * longG + latG * latG).toFixed(2)),

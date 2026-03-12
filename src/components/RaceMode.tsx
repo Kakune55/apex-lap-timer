@@ -143,6 +143,31 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         }, 5000);
     };
 
+    const estimateSegmentSpeed = (
+        fromTimestamp: number,
+        toTimestamp: number,
+        segmentDistance: number,
+    ): number | undefined => {
+        const dt = (toTimestamp - fromTimestamp) / 1000;
+        if (dt <= 0) {
+            return undefined;
+        }
+        return segmentDistance / dt;
+    };
+
+    const sanitizeLapPointSpeed = (
+        reportedSpeed: number | undefined,
+        fallbackSpeed: number | undefined,
+    ): number => {
+        if (typeof reportedSpeed === 'number' && Number.isFinite(reportedSpeed) && reportedSpeed > 0.5) {
+            return reportedSpeed;
+        }
+        if (typeof fallbackSpeed === 'number' && Number.isFinite(fallbackSpeed) && fallbackSpeed > 0) {
+            return fallbackSpeed;
+        }
+        return Math.max(0, reportedSpeed ?? 0);
+    };
+
     // High frequency timer update for UI
     useEffect(() => {
         if (raceState !== 'racing') return;
@@ -203,8 +228,14 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             }
         } else if (raceState === 'racing') {
             const dist = getDistance(prev.lat, prev.lon, curr.lat, curr.lon);
+            const segmentSpeed = estimateSegmentSpeed(prev.timestamp, curr.timestamp, dist);
             const gpsAccuracy = curr.accuracy || 12;
             const prevProjectedDistance = projectedDistanceRef.current;
+            const lastRecordedSpeed = currentLapPointsRef.current[currentLapPointsRef.current.length - 1]?.speed;
+            const positiveSegmentSpeed = typeof segmentSpeed === 'number' && segmentSpeed > 0 ? segmentSpeed : undefined;
+            const speedFallback = positiveSegmentSpeed ?? lastRecordedSpeed;
+            const safePrevSpeed = sanitizeLapPointSpeed(prev.speed, speedFallback);
+            const safeCurrSpeed = sanitizeLapPointSpeed(curr.speed, speedFallback);
 
             const projection = projectToTrackDistance(track.points, curr.lat, curr.lon, {
                 minDistance: Math.max(0, prevProjectedDistance - 12),
@@ -246,7 +277,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     timeOffset: gpsLapTime,
                     distance: newDist,
                     delta: currentDelta,
-                    speed: curr.speed
+                    speed: safeCurrSpeed
                 };
                 currentLapPointsRef.current.push(newPoint);
                 setRecordedPoints(prev => [...prev, newPoint]);
@@ -293,7 +324,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 const finishRatio = getTimeInterpolationRatio(prev.timestamp, curr.timestamp, finishCrossingTime);
                 const finishLat = prev.lat + (curr.lat - prev.lat) * finishRatio;
                 const finishLon = prev.lon + (curr.lon - prev.lon) * finishRatio;
-                const finishSpeed = prev.speed + (curr.speed - prev.speed) * finishRatio;
+                const finishSpeed = safePrevSpeed + (safeCurrSpeed - safePrevSpeed) * finishRatio;
                 const finalSegmentIndex = sectorGates.length;
                 if (finalSegmentIndex < MAX_SECTOR_SEGMENTS) {
                     const expectedEnd = sectorBoundaryExpectedTimes[finalSegmentIndex] || finishLapTime;
