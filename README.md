@@ -64,18 +64,121 @@ Sync API endpoints:
 - `POST /api/sync`
 - `GET /api/tracks?since=<timestamp>`
 
-### Optional: Protect API with HTTP Basic Auth
+Auth API endpoints:
 
-Set credentials as Worker secrets (production):
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+
+### Authentication Model
+
+The app now uses classic login + session token auth:
+
+- Login with username/password via `POST /api/auth/login`.
+- Server returns a bearer token.
+- Frontend stores token locally and sends `Authorization: Bearer <token>` for `/api/*` requests.
+- Session validity is tracked in the `sessions` table.
+
+No Basic Auth environment variables are required anymore.
+
+### User Management (Manual)
+
+This project intentionally does not implement registration/password reset UI yet. Manage users directly in D1.
+
+#### 1. Generate password hash and salt
+
+Use PBKDF2-SHA256 (same as backend verification):
 
 ```txt
-npx wrangler secret put BASIC_AUTH_USERNAME
-npx wrangler secret put BASIC_AUTH_PASSWORD
+npm run hash-password -- "YOUR_PASSWORD"
 ```
 
-For local `wrangler dev`, you can put the same keys in `.dev.vars` (see `.dev.vars.example`).
+Optional args:
 
-When both values are configured, all `/api/*` requests require `Authorization: Basic ...`.
+```txt
+npm run hash-password -- "YOUR_PASSWORD" 120000
+npm run hash-password -- "YOUR_PASSWORD" 120000 aabbccddeeff00112233445566778899
+```
+
+Save the printed `salt`, `iter`, and `hash`.
+
+#### 2. Create user
+
+```sql
+INSERT INTO users (
+	user_id,
+	display_name,
+	auth_provider,
+	password_hash,
+	password_salt,
+	password_iterations,
+	is_active,
+	created_at,
+	updated_at
+) VALUES (
+	'kaku',
+	'Kaku',
+	'local',
+	'<hash>',
+	'<salt>',
+	120000,
+	1,
+	CAST(strftime('%s','now') AS INTEGER) * 1000,
+	CAST(strftime('%s','now') AS INTEGER) * 1000
+);
+```
+
+#### 3. Update password
+
+Regenerate `hash` + `salt`, then:
+
+```sql
+UPDATE users
+SET password_hash = '<new_hash>',
+		password_salt = '<new_salt>',
+		password_iterations = 120000,
+		updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+WHERE user_id = 'kaku';
+```
+
+#### 4. Disable / enable user
+
+```sql
+UPDATE users
+SET is_active = 0,
+		updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+WHERE user_id = 'kaku';
+```
+
+```sql
+UPDATE users
+SET is_active = 1,
+		updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+WHERE user_id = 'kaku';
+```
+
+#### 5. Delete user (and all data)
+
+Because of foreign keys with `ON DELETE CASCADE`, deleting a user removes tracks and sessions.
+
+```sql
+DELETE FROM users WHERE user_id = 'kaku';
+```
+
+#### 6. Useful queries
+
+```sql
+SELECT user_id, display_name, is_active, created_at, updated_at
+FROM users
+ORDER BY updated_at DESC;
+```
+
+```sql
+SELECT user_id, COUNT(*) AS track_count
+FROM tracks
+GROUP BY user_id
+ORDER BY track_count DESC;
+```
 
 ## Types
 

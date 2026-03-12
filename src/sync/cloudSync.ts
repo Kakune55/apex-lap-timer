@@ -4,6 +4,7 @@ const TRACKS_KEY = "apex_tracks";
 const OUTBOX_KEY = "apex_sync_outbox";
 const DEVICE_ID_KEY = "apex_device_id";
 const LAST_SYNC_KEY = "apex_last_sync_at";
+const AUTH_TOKEN_KEY = "apex_auth_token";
 
 export type SyncState = "idle" | "syncing" | "offline" | "error";
 
@@ -90,6 +91,23 @@ function getLastSyncAt(): number {
 
 function setLastSyncAt(ts: number) {
   localStorage.setItem(LAST_SYNC_KEY, String(ts));
+}
+
+export function setAuthToken(token: string) {
+  if (!token) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    return;
+  }
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+export function getAuthToken(): string | null {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  return token && token.trim() ? token : null;
 }
 
 function mergeTracks(localTracks: Track[], remoteTracks: RemoteTrackRecord[]): Track[] {
@@ -235,6 +253,12 @@ export function createCloudSync(options: {
     emitStatus({ state: "syncing", error: null });
 
     try {
+      const authToken = getAuthToken();
+      if (!authToken) {
+        emitStatus({ state: "error", error: "not authenticated" });
+        return;
+      }
+
       const syncStartedAt = now();
       const before = getOutbox();
       const due = before.filter((item) => item.nextAttemptAt <= now());
@@ -244,6 +268,7 @@ export function createCloudSync(options: {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
             deviceId: getDeviceId(),
@@ -270,7 +295,11 @@ export function createCloudSync(options: {
       const shouldPull = due.length > 0 || syncStartedAt - lastSyncAt >= STALE_PULL_MS;
 
       if (shouldPull) {
-        const pullResponse = await fetch(`/api/tracks?since=${lastSyncAt}`);
+        const pullResponse = await fetch(`/api/tracks?since=${lastSyncAt}`, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
         if (!pullResponse.ok) {
           throw new Error(`sync pull failed: ${pullResponse.status}`);
         }

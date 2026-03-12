@@ -1,5 +1,5 @@
 # Copy this file to .dev.vars for local `wrangler dev`
-# Only when both values are set, /api/* will require HTTP Basic Auth.
-
-BASIC_AUTH_USERNAME=admin
-BASIC_AUTH_PASSWORD=change-me
+# No auth secrets are required for the current session-token login flow.
+#
+# User credentials are stored in D1 `users` table (password hash + salt),
+# and login is handled by /api/auth/login.

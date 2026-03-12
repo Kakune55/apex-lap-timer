@@ -6,7 +6,8 @@
 		"dev:frontend": "vite --port=3000 --host=0.0.0.0",
 		"build:frontend": "vite build && node scripts/prepare-pwa.mjs",
 		"deploy": "npm run build:frontend && wrangler deploy --minify",
-		"cf-typegen": "wrangler types --env-interface CloudflareBindings"
+		"cf-typegen": "wrangler types --env-interface CloudflareBindings",
+		"hash-password": "node scripts/gen-password-hash.mjs"
 	},
 	"dependencies": {
 		"hono": "^4.12.5",

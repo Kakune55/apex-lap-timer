@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { Track } from './types';
 import { TrackList } from './components/TrackList';
 import { RecordTrack } from './components/RecordTrack';
@@ -7,6 +7,7 @@ import { TrackDetails } from './components/TrackDetails';
 import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
 import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
+import { getCurrentUser, login, logout, SessionUser } from './sync/auth';
 
 function DevTools() {
     const { simMode, simSpeed, toggleSimulation, setSimulationSpeed } = useGPS();
@@ -91,6 +92,12 @@ export default function App() {
         return queryDebug || savedDebug;
     });
     const [pendingDeleteTrack, setPendingDeleteTrack] = useState<Track | null>(null);
+    const [authUser, setAuthUser] = useState<SessionUser | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [loginUsername, setLoginUsername] = useState('');
+    const [loginPassword, setLoginPassword] = useState('');
+    const [loginBusy, setLoginBusy] = useState(false);
+    const [loginError, setLoginError] = useState<string | null>(null);
 
     const normalizeTracks = (incoming: Track[]) => {
         const now = Date.now();
@@ -123,6 +130,44 @@ export default function App() {
             }
         }
 
+        let disposed = false;
+        void (async () => {
+            try {
+                const user = await getCurrentUser();
+                if (!disposed) {
+                    setAuthUser(user);
+                }
+            } catch (e) {
+                if (!disposed) {
+                    console.error('Failed to restore auth session', e);
+                }
+            } finally {
+                if (!disposed) {
+                    setAuthLoading(false);
+                }
+            }
+        })();
+
+        return () => {
+            disposed = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!authUser) {
+            if (syncRef.current) {
+                syncRef.current.stop();
+                syncRef.current = null;
+            }
+            setSyncStatus({
+                state: 'idle',
+                pending: 0,
+                lastSyncAt: null,
+                error: null,
+            });
+            return;
+        }
+
         const syncManager = createCloudSync({
             getTracks: () => tracksRef.current,
             setTracks: (merged) => {
@@ -137,12 +182,13 @@ export default function App() {
 
         return () => {
             syncManager.stop();
+            syncRef.current = null;
             if (hideSyncTimeoutRef.current !== null) {
                 clearTimeout(hideSyncTimeoutRef.current);
                 hideSyncTimeoutRef.current = null;
             }
         };
-    }, []);
+    }, [authUser]);
 
     useEffect(() => {
         if (hideSyncTimeoutRef.current !== null) {
@@ -281,6 +327,88 @@ export default function App() {
 
     const gpsRateSupported = isGPSRefreshRateSupported();
 
+    const handleLogin = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!loginUsername.trim() || !loginPassword) {
+            setLoginError('Please enter username and password');
+            return;
+        }
+
+        setLoginBusy(true);
+        setLoginError(null);
+        try {
+            const user = await login(loginUsername.trim(), loginPassword);
+            setAuthUser(user);
+            setLoginPassword('');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Login failed';
+            setLoginError(message);
+        } finally {
+            setLoginBusy(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        await logout();
+        setAuthUser(null);
+        setView('home');
+        setSelectedTrack(null);
+        setLoginPassword('');
+        setLoginError(null);
+    };
+
+    if (authLoading) {
+        return (
+            <div className="h-full bg-bg-color text-white flex items-center justify-center">
+                <div className="apex-panel rounded-3xl px-6 py-5 text-sm text-text-secondary">Checking session...</div>
+            </div>
+        );
+    }
+
+    if (!authUser) {
+        return (
+            <div className="h-full bg-bg-color text-white flex items-center justify-center px-5">
+                <form onSubmit={handleLogin} className="w-full max-w-sm apex-panel rounded-3xl p-6 space-y-4">
+                    <div>
+                        <h2 className="text-2xl font-bold">Sign In</h2>
+                        <p className="text-sm text-text-secondary mt-1">Use your configured account to access cloud sync.</p>
+                    </div>
+
+                    <label className="block space-y-1">
+                        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Username</span>
+                        <input
+                            value={loginUsername}
+                            onChange={(e) => setLoginUsername(e.target.value)}
+                            autoComplete="username"
+                            className="w-full rounded-xl bg-white/10 border border-white/15 px-3 py-2 text-sm outline-none focus:border-accent-green"
+                        />
+                    </label>
+
+                    <label className="block space-y-1">
+                        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Password</span>
+                        <input
+                            type="password"
+                            value={loginPassword}
+                            onChange={(e) => setLoginPassword(e.target.value)}
+                            autoComplete="current-password"
+                            className="w-full rounded-xl bg-white/10 border border-white/15 px-3 py-2 text-sm outline-none focus:border-accent-green"
+                        />
+                    </label>
+
+                    {loginError ? <div className="text-xs text-accent-red font-bold">{loginError}</div> : null}
+
+                    <button
+                        type="submit"
+                        disabled={loginBusy}
+                        className="w-full apex-btn-primary py-2.5 disabled:opacity-60"
+                    >
+                        {loginBusy ? 'Signing in...' : 'Sign In'}
+                    </button>
+                </form>
+            </div>
+        );
+    }
+
     return (
         <div className="h-full bg-bg-color text-white selection:bg-white/20 overflow-hidden">
             <div className={`fixed bottom-6 right-24 z-40 flex items-center gap-2 rounded-2xl apex-glass px-3 py-2 text-xs shadow-xl transition-all duration-500 ${showSyncIndicator ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
@@ -338,6 +466,19 @@ export default function App() {
                         </div>
 
                         <div className="space-y-5">
+                            <div className="apex-panel-muted rounded-2xl p-4 flex items-center justify-between">
+                                <div>
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Signed in</div>
+                                    <div className="text-xs text-white/90 mt-1">{authUser.displayName || authUser.userId}</div>
+                                </div>
+                                <button
+                                    onClick={handleLogout}
+                                    className="px-3 py-2 rounded-xl bg-white/10 text-xs font-bold uppercase tracking-widest hover:bg-white/20 transition-colors"
+                                >
+                                    Logout
+                                </button>
+                            </div>
+
                             <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-text-secondary font-bold uppercase tracking-widest text-[10px]">Location Refresh Rate</span>
