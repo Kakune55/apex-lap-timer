@@ -484,6 +484,18 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         onBack();
     };
 
+    const sprintDelta = sprintTime - track.bestTime;
+    const sprintIsNewBest = sprintTime < track.bestTime;
+    const sprintLap = lastSprintLapRef.current;
+    const referenceSectorSplits = toFixedSectorCount(
+        sectorBoundaryExpectedTimes.map((expectedEnd, idx) => {
+            const expectedStart = idx === 0 ? 0 : (sectorBoundaryExpectedTimes[idx - 1] || 0);
+            return Math.max(0, expectedEnd - expectedStart);
+        }),
+    );
+    const sprintSectorSplits = sprintLap ? toFixedSectorCount(getLapSectorSplits(sprintLap)) : [0, 0, 0];
+    const sprintSectorDeltas = sprintSectorSplits.map((split, idx) => split - (referenceSectorSplits[idx] ?? split));
+
     return (
         <div className="relative h-full flex flex-col bg-bg-color text-white overflow-hidden">
             {/* Map Background */}
@@ -638,17 +650,50 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             {/* Sprint Finish Modal */}
             {showSprintModal && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
-                    <div className="apex-panel p-8 rounded-3xl max-w-sm w-full text-center">
+                    <div className="apex-panel p-6 sm:p-8 rounded-3xl max-w-md w-full text-center">
                         <h3 className="text-2xl font-bold mb-2">Sprint Finished!</h3>
-                        <div className="text-5xl font-sans font-bold mb-6 text-accent-green tabular-nums">
+                        <div className="text-5xl font-sans font-bold mb-3 text-accent-green tabular-nums">
                             {formatTime(sprintTime)}
                         </div>
-                        {sprintTime < track.bestTime ? (
+
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                            <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-left">
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Delta</div>
+                                <div className={`text-lg font-sans font-bold tabular-nums ${sprintDelta <= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                    {formatDelta(sprintDelta)}
+                                </div>
+                            </div>
+                            <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-left">
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Reference</div>
+                                <div className="text-lg font-sans font-bold tabular-nums text-white/90">
+                                    {formatTime(track.bestTime)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-white/5 border border-white/10 p-3 mb-6 text-left">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-2">Sectors</div>
+                            <div className="space-y-1.5">
+                                {sprintSectorSplits.map((split, idx) => {
+                                    const sectorDelta = sprintSectorDeltas[idx] || 0;
+                                    const deltaClass = sectorDelta < 0 ? 'text-accent-green' : sectorDelta > 0 ? 'text-accent-yellow' : 'text-text-secondary';
+                                    return (
+                                        <div key={`sprint-sector-${idx}`} className="grid grid-cols-[44px_1fr_auto] items-center gap-2 text-xs tabular-nums">
+                                            <span className="text-text-secondary font-bold">S{idx + 1}</span>
+                                            <span className="text-white/90 font-semibold">{formatTime(split)}</span>
+                                            <span className={`font-bold ${deltaClass}`}>{shortDelta(sectorDelta)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {sprintIsNewBest ? (
                             <>
                                 <div className="text-accent-green font-bold mb-6 uppercase tracking-widest text-sm">
                                     New Personal Best!
                                 </div>
-                                <p className="text-text-secondary mb-8 text-sm">
+                                <p className="text-text-secondary mb-6 text-sm">
                                     Would you like to update the reference track with this new record?
                                 </p>
                                 <div className="flex gap-4">
