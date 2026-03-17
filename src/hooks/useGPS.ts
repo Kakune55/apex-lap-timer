@@ -41,6 +41,25 @@ let watchId: number | null = null;
 let currentAngle = 0; // Keep track of angle so speed changes don't jump position
 let gpsRefreshRateHz = loadInitialGPSRate();
 let lastRealGPSUpdateAt = 0;
+let realGPSWatchdogTimeout: number | null = null;
+let permissionRequestTimeout: number | null = null;
+let isPermissionRequestInFlight = false;
+const FIRST_FIX_WATCHDOG_MS = 12000;
+const PERMISSION_REQUEST_WATCHDOG_MS = 10000;
+
+const clearRealGPSWatchdog = () => {
+    if (realGPSWatchdogTimeout !== null) {
+        clearTimeout(realGPSWatchdogTimeout);
+        realGPSWatchdogTimeout = null;
+    }
+};
+
+const clearPermissionRequestWatchdog = () => {
+    if (permissionRequestTimeout !== null) {
+        clearTimeout(permissionRequestTimeout);
+        permissionRequestTimeout = null;
+    }
+};
 
 const hasSecureLocationContext = () => {
     const host = window.location.hostname;
@@ -116,6 +135,7 @@ const stopRealGPS = () => {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
     }
+    clearRealGPSWatchdog();
     lastRealGPSUpdateAt = 0;
 };
 
@@ -133,12 +153,22 @@ const startRealGPS = () => {
     }
     if (watchId !== null) return;
 
+    clearRealGPSWatchdog();
+    realGPSWatchdogTimeout = window.setTimeout(() => {
+        if (lastRealGPSUpdateAt === 0 && watchId !== null && !isPermissionRequestInFlight) {
+            globalError = 'GPS request is taking too long. Keep the app in foreground and tap Retry GPS.';
+            notify();
+        }
+    }, FIRST_FIX_WATCHDOG_MS);
+
     watchId = navigator.geolocation.watchPosition(
         (position) => {
             const minUpdateIntervalMs = 1000 / gpsRefreshRateHz;
             if (lastRealGPSUpdateAt > 0 && position.timestamp - lastRealGPSUpdateAt < minUpdateIntervalMs) {
                 return;
             }
+
+            clearRealGPSWatchdog();
 
             globalData = {
                 lat: position.coords.latitude,
@@ -153,6 +183,7 @@ const startRealGPS = () => {
             notify();
         },
         (err) => {
+            clearRealGPSWatchdog();
             globalError = getGeoErrorMessage(err);
             notify();
         },
@@ -176,8 +207,30 @@ export const requestGPSPermission = () => {
         return;
     }
 
+    if (isPermissionRequestInFlight) {
+        globalError = 'Waiting for Android permission dialog...';
+        notify();
+        return;
+    }
+
+    isPermissionRequestInFlight = true;
+    globalError = null;
+    notify();
+
+    clearPermissionRequestWatchdog();
+    permissionRequestTimeout = window.setTimeout(() => {
+        if (!isPermissionRequestInFlight) {
+            return;
+        }
+        isPermissionRequestInFlight = false;
+        globalError = 'No response from location permission prompt. Check browser site permissions and system Location setting, then retry.';
+        notify();
+    }, PERMISSION_REQUEST_WATCHDOG_MS);
+
     navigator.geolocation.getCurrentPosition(
         (position) => {
+            isPermissionRequestInFlight = false;
+            clearPermissionRequestWatchdog();
             globalData = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude,
@@ -192,18 +245,22 @@ export const requestGPSPermission = () => {
             notify();
         },
         (err) => {
+            isPermissionRequestInFlight = false;
+            clearPermissionRequestWatchdog();
             globalError = getGeoErrorMessage(err);
             notify();
         },
         {
             enableHighAccuracy: true,
             maximumAge: 0,
-            timeout: 10000,
+            timeout: 12000,
         },
     );
 };
 
 export const retryGPS = () => {
+    isPermissionRequestInFlight = false;
+    clearPermissionRequestWatchdog();
     stopRealGPS();
     startRealGPS();
     notify();
@@ -259,6 +316,7 @@ export function useGPS() {
         simMode: isSimulating,
         simSpeed: simSpeedKmh,
         gpsRefreshRateHz,
+        requestingPermission: isPermissionRequestInFlight,
     });
 
     useEffect(() => {
@@ -269,6 +327,7 @@ export function useGPS() {
                 simMode: isSimulating,
                 simSpeed: simSpeedKmh,
                 gpsRefreshRateHz,
+                requestingPermission: isPermissionRequestInFlight,
             });
         };
         listeners.add(handleUpdate);
@@ -288,6 +347,7 @@ export function useGPS() {
         simMode: state.simMode,
         simSpeed: state.simSpeed,
         gpsRefreshRateHz: state.gpsRefreshRateHz,
+        requestingPermission: state.requestingPermission,
         requestPermission: requestGPSPermission,
         retryGPS,
         toggleSimulation,

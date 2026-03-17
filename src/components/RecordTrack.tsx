@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function RecordTrack({ onSave, onCancel }: Props) {
-    const { data: gps, error: gpsError, requestPermission, retryGPS } = useGPS();
+    const { data: gps, error: gpsError, requestingPermission, requestPermission, retryGPS } = useGPS();
     const [step, setStep] = useState<'setup' | 'waiting_speed' | 'recording' | 'finished'>('setup');
     const [trackType, setTrackType] = useState<'circuit' | 'sprint'>('circuit');
     const [trackName, setTrackName] = useState('');
@@ -262,9 +262,10 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             onClick={requestPermission}
-                                            className="bg-accent-green text-black font-bold py-2 rounded-xl text-sm hover:brightness-110 transition-colors"
+                                            disabled={requestingPermission}
+                                            className="bg-accent-green text-black font-bold py-2 rounded-xl text-sm hover:brightness-110 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                         >
-                                            Enable GPS
+                                            {requestingPermission ? 'Requesting...' : 'Enable GPS'}
                                         </button>
                                         <button
                                             onClick={retryGPS}
@@ -273,6 +274,11 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                             Retry GPS
                                         </button>
                                     </div>
+                                    {requestingPermission ? (
+                                        <p className="text-xs text-center text-white/70">
+                                            Waiting for Android permission dialog...
+                                        </p>
+                                    ) : null}
                                 </div>
                             )}
                         </div>
@@ -290,9 +296,10 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                         {!gps && (
                             <button
                                 onClick={requestPermission}
-                                className="mt-4 bg-accent-green text-black font-bold py-2.5 px-4 rounded-xl text-sm hover:brightness-110 transition-colors"
+                                disabled={requestingPermission}
+                                className="mt-4 bg-accent-green text-black font-bold py-2.5 px-4 rounded-xl text-sm hover:brightness-110 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                Enable GPS Permission
+                                {requestingPermission ? 'Requesting Permission...' : 'Enable GPS Permission'}
                             </button>
                         )}
                     </div>
