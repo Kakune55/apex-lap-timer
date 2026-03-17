@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react';
 import { Track } from './types';
 import { TrackList } from './components/TrackList';
 import { RecordTrack } from './components/RecordTrack';
@@ -8,6 +8,14 @@ import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSuppo
 import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
 import { getCurrentUser, login, logout, SessionUser } from './sync/auth';
+
+const WAKE_LOCK_STORAGE_KEY = 'apex_keep_screen_awake';
+
+type WakeLockNavigator = Navigator & {
+    wakeLock?: {
+        request(type: 'screen'): Promise<WakeLockSentinel>;
+    };
+};
 
 function DevTools() {
     const { simMode, simSpeed, toggleSimulation, setSimulationSpeed } = useGPS();
@@ -91,6 +99,15 @@ export default function App() {
         const savedDebug = window.localStorage.getItem('apex_debug') === 'true';
         return queryDebug || savedDebug;
     });
+    const [keepScreenAwake, setKeepScreenAwake] = useState(() => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+        return window.localStorage.getItem(WAKE_LOCK_STORAGE_KEY) === 'true';
+    });
+    const [wakeLockActive, setWakeLockActive] = useState(false);
+    const [wakeLockError, setWakeLockError] = useState<string | null>(null);
+    const wakeLockRef = useRef<WakeLockSentinel | null>(null);
     const [pendingDeleteTrack, setPendingDeleteTrack] = useState<Track | null>(null);
     const [authUser, setAuthUser] = useState<SessionUser | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -325,6 +342,84 @@ export default function App() {
         });
     };
 
+    const releaseWakeLock = useCallback(async () => {
+        if (!wakeLockRef.current) {
+            setWakeLockActive(false);
+            return;
+        }
+
+        try {
+            await wakeLockRef.current.release();
+        } catch {
+            // Ignore release failures and keep the UI state consistent.
+        } finally {
+            wakeLockRef.current = null;
+            setWakeLockActive(false);
+        }
+    }, []);
+
+    const requestWakeLock = useCallback(async () => {
+        const wakeLockApi = (navigator as WakeLockNavigator).wakeLock;
+
+        if (!wakeLockApi) {
+            setWakeLockActive(false);
+            setWakeLockError('Keep screen awake is not supported on this browser/device.');
+            return;
+        }
+
+        if (document.visibilityState !== 'visible') {
+            return;
+        }
+
+        try {
+            const sentinel = await wakeLockApi.request('screen');
+            sentinel.onrelease = () => {
+                setWakeLockActive(false);
+            };
+            wakeLockRef.current = sentinel;
+            setWakeLockActive(!sentinel.released);
+            setWakeLockError(null);
+        } catch {
+            setWakeLockActive(false);
+            setWakeLockError('Unable to keep screen awake. Check battery saver and browser permissions.');
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!keepScreenAwake) {
+            setWakeLockError(null);
+            void releaseWakeLock();
+            return;
+        }
+
+        void requestWakeLock();
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && keepScreenAwake) {
+                void requestWakeLock();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            void releaseWakeLock();
+        };
+    }, [keepScreenAwake, requestWakeLock, releaseWakeLock]);
+
+    const handleWakeLockToggle = () => {
+        setKeepScreenAwake((prev) => {
+            const next = !prev;
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem(WAKE_LOCK_STORAGE_KEY, String(next));
+            }
+            if (!next) {
+                setWakeLockError(null);
+            }
+            return next;
+        });
+    };
+
     const gpsRateSupported = isGPSRefreshRateSupported();
 
     const handleLogin = async (e: FormEvent) => {
@@ -511,6 +606,30 @@ export default function App() {
                                 >
                                     <span className={`block h-6 w-6 rounded-full bg-white transition-transform ${debugEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
                                 </button>
+                            </div>
+
+                            <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Keep Screen Awake</div>
+                                        <div className="text-xs text-white/80 mt-1">Prevent display sleep while app is open</div>
+                                    </div>
+                                    <button
+                                        onClick={handleWakeLockToggle}
+                                        className={`w-14 h-8 rounded-full border transition-colors ${keepScreenAwake ? 'bg-accent-green border-accent-green' : 'bg-white/10 border-white/20'}`}
+                                        aria-label="Toggle keep screen awake"
+                                    >
+                                        <span className={`block h-6 w-6 rounded-full bg-white transition-transform ${keepScreenAwake ? 'translate-x-7' : 'translate-x-1'}`} />
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-text-secondary">
+                                    {keepScreenAwake
+                                        ? wakeLockActive
+                                            ? 'Active: display sleep is currently blocked.'
+                                            : 'Enabling wake lock... keep this tab in foreground on Android.'
+                                        : 'Off: screen can sleep normally.'}
+                                </p>
+                                {wakeLockError ? <p className="text-[10px] text-accent-red">{wakeLockError}</p> : null}
                             </div>
                         </div>
                     </div>
