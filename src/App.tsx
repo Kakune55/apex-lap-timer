@@ -742,14 +742,20 @@ export default function App() {
                                 <div className="min-w-0">
                                     <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.signedIn')}</div>
                                     <div className="mt-1 min-w-0 truncate text-xs text-white/90">{authUser.displayName || authUser.userId}</div>
-                                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.18em] ${authUser.dashboardAccess ? 'bg-accent-green/15 text-accent-green' : 'bg-white/8 text-white/45'}`}>
-                                            {t('app.settings.permissionDashboard')}
-                                        </span>
-                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.18em] ${authUser.isAdmin ? 'bg-cyan-400/15 text-cyan-300' : 'bg-white/8 text-white/45'}`}>
-                                            {t('app.settings.permissionAdmin')}
-                                        </span>
-                                    </div>
+                                    {(authUser.dashboardAccess || authUser.isAdmin) && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                            {authUser.dashboardAccess && (
+                                                <span className="rounded-full bg-accent-green/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-accent-green">
+                                                    {t('app.settings.permissionDashboard')}
+                                                </span>
+                                            )}
+                                            {authUser.isAdmin && (
+                                                <span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                                                    {t('app.settings.permissionAdmin')}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <button
                                     onClick={handleLogout}
