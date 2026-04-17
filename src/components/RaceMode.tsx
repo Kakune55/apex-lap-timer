@@ -23,6 +23,8 @@ interface Props {
     onUpdateTrack: (track: Track) => void;
 }
 
+const TIMER_UPDATE_MS = 50;
+
 export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const MAX_SECTOR_SEGMENTS = 3;
     const MAX_SECTOR_GATES = MAX_SECTOR_SEGMENTS - 1;
@@ -53,7 +55,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const freezeTimeoutRef = useRef<number | null>(null);
 
     const prevGpsRef = useRef(gps);
-    const requestRef = useRef<number>(0);
+    const timerRef = useRef<number | null>(null);
 
     const lapHistory = track.laps || [];
     const sectorGates = (track.sectors || []).slice(0, MAX_SECTOR_GATES);
@@ -172,17 +174,28 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         return Math.max(0, reportedSpeed ?? 0);
     };
 
-    // High frequency timer update for UI
+    // Update the timer at a fixed cadence to avoid re-rendering the whole race UI every animation frame.
     useEffect(() => {
-        if (raceState !== 'racing') return;
+        if (raceState !== 'racing') {
+            if (timerRef.current !== null) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+            return;
+        }
 
         const updateTimer = () => {
             setCurrentLapTime(Date.now() - startTime);
-            requestRef.current = requestAnimationFrame(updateTimer);
         };
-        requestRef.current = requestAnimationFrame(updateTimer);
+        updateTimer();
+        timerRef.current = window.setInterval(updateTimer, TIMER_UPDATE_MS);
 
-        return () => cancelAnimationFrame(requestRef.current);
+        return () => {
+            if (timerRef.current !== null) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+        };
     }, [raceState, startTime]);
 
     // GPS Logic
@@ -429,6 +442,10 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             if (freezeTimeoutRef.current !== null) {
                 clearTimeout(freezeTimeoutRef.current);
                 freezeTimeoutRef.current = null;
+            }
+            if (timerRef.current !== null) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
             }
         };
     }, []);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useViewportMetrics } from '../hooks/useViewportMetrics';
 import { Track, Lap, TrackPoint } from '../types';
 import { TrackMap } from './TrackMap';
@@ -7,9 +7,14 @@ import { ArrowLeft, History, Map as MapIcon, Trophy, Ruler, Edit3, X, Plus, Tras
 import { motion, AnimatePresence } from 'motion/react';
 import { MapViewMode, getNextMapViewMode } from '../utils/map';
 import { MapModeToggle } from './MapModeToggle';
-import { LapAnalysisCharts } from './LapAnalysisCharts';
-import { TrackShareDialog } from './TrackShareDialog';
 import { useI18n } from '../i18n';
+
+const LapAnalysisCharts = lazy(() =>
+    import('./LapAnalysisCharts').then((module) => ({ default: module.LapAnalysisCharts })),
+);
+const TrackShareDialog = lazy(() =>
+    import('./TrackShareDialog').then((module) => ({ default: module.TrackShareDialog })),
+);
 
 interface Props {
     track: Track;
@@ -322,7 +327,9 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                 exit={{ opacity: 0, height: 0 }}
                                 className="overflow-hidden"
                             >
-                                <LapAnalysisCharts lap={selectedLap} />
+                                <Suspense fallback={<div className="apex-panel rounded-3xl p-5 text-sm text-text-secondary">{t('charts.gForce')}</div>}>
+                                    <LapAnalysisCharts lap={selectedLap} />
+                                </Suspense>
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -503,11 +510,15 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     </div>
                 </div>
             )}
-            <TrackShareDialog
-                isOpen={isShareDialogOpen}
-                track={track}
-                onClose={() => setIsShareDialogOpen(false)}
-            />
+            {isShareDialogOpen ? (
+                <Suspense fallback={null}>
+                    <TrackShareDialog
+                        isOpen={isShareDialogOpen}
+                        track={track}
+                        onClose={() => setIsShareDialogOpen(false)}
+                    />
+                </Suspense>
+            ) : null}
         </div>
     );
 }

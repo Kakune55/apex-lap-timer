@@ -1,12 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type FormEvent } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo, type FormEvent } from 'react';
 import { Track } from './types';
 import { TrackList } from './components/TrackList';
-import { RecordTrack } from './components/RecordTrack';
-import { RaceMode } from './components/RaceMode';
-import { TrackDetails } from './components/TrackDetails';
-import { AdminPanel } from './components/AdminPanel';
-import { DashboardView } from './components/DashboardView';
-import { ImportShareDialog } from './components/ImportShareDialog';
 import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
 import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X, LogOut, Download } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
@@ -24,6 +18,25 @@ type WakeLockNavigator = Navigator & {
         request(type: 'screen'): Promise<WakeLockSentinel>;
     };
 };
+
+const RecordTrack = lazy(() =>
+    import('./components/RecordTrack').then((module) => ({ default: module.RecordTrack })),
+);
+const RaceMode = lazy(() =>
+    import('./components/RaceMode').then((module) => ({ default: module.RaceMode })),
+);
+const TrackDetails = lazy(() =>
+    import('./components/TrackDetails').then((module) => ({ default: module.TrackDetails })),
+);
+const AdminPanel = lazy(() =>
+    import('./components/AdminPanel').then((module) => ({ default: module.AdminPanel })),
+);
+const DashboardView = lazy(() =>
+    import('./components/DashboardView').then((module) => ({ default: module.DashboardView })),
+);
+const ImportShareDialog = lazy(() =>
+    import('./components/ImportShareDialog').then((module) => ({ default: module.ImportShareDialog })),
+);
 
 function getRouteTitle(route: AppRoute, trackName: string | null, t: ReturnType<typeof useI18n>['t']) {
     switch (route.name) {
@@ -96,6 +109,14 @@ function DevTools() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function ViewFallback({ label }: { label: string }) {
+    return (
+        <div className="h-full flex items-center justify-center px-5">
+            <div className="apex-panel rounded-3xl px-6 py-5 text-sm text-text-secondary">{label}</div>
         </div>
     );
 }
@@ -650,45 +671,55 @@ export default function App() {
             )}
 
             {route.name === 'record' && (
-                <RecordTrack
-                    onSave={handleSaveTrack}
-                    onCancel={handleBackToHome}
-                />
+                <Suspense fallback={<ViewFallback label={t('recordTrack.title')} />}>
+                    <RecordTrack
+                        onSave={handleSaveTrack}
+                        onCancel={handleBackToHome}
+                    />
+                </Suspense>
             )}
 
             {route.name === 'track-details' && activeTrack && (
-                <TrackDetails
-                    track={activeTrack}
-                    onBack={handleBackToHome}
-                    onUpdateTrack={handleUpdateTrack}
-                />
+                <Suspense fallback={<ViewFallback label={activeTrack.name} />}>
+                    <TrackDetails
+                        track={activeTrack}
+                        onBack={handleBackToHome}
+                        onUpdateTrack={handleUpdateTrack}
+                    />
+                </Suspense>
             )}
 
             {route.name === 'track-race' && activeTrack && (
-                <RaceMode
-                    track={activeTrack}
-                    onBack={handleBackToHome}
-                    onUpdateTrack={handleUpdateTrack}
-                />
+                <Suspense fallback={<ViewFallback label={activeTrack.name} />}>
+                    <RaceMode
+                        track={activeTrack}
+                        onBack={handleBackToHome}
+                        onUpdateTrack={handleUpdateTrack}
+                    />
+                </Suspense>
             )}
 
             {route.name === 'dashboard' && authUser.dashboardAccess && (
-                <DashboardView
-                    authUser={authUser}
-                    tracksCount={tracks.length}
-                    syncStatus={syncStatus}
-                    syncText={syncText}
-                    lastSyncText={formatSyncTime(syncStatus.lastSyncAt)}
-                    onBackToMobile={handleBackToMobile}
-                    onOpenAdmin={handleOpenAdmin}
-                />
+                <Suspense fallback={<ViewFallback label={t('dashboard.title')} />}>
+                    <DashboardView
+                        authUser={authUser}
+                        tracksCount={tracks.length}
+                        syncStatus={syncStatus}
+                        syncText={syncText}
+                        lastSyncText={formatSyncTime(syncStatus.lastSyncAt)}
+                        onBackToMobile={handleBackToMobile}
+                        onOpenAdmin={handleOpenAdmin}
+                    />
+                </Suspense>
             )}
 
             {route.name === 'admin' && authUser.isAdmin && (
-                <AdminPanel
-                    currentUserId={authUser.userId}
-                    onBack={() => navigate({ name: 'dashboard' })}
-                />
+                <Suspense fallback={<ViewFallback label={t('admin.title')} />}>
+                    <AdminPanel
+                        currentUserId={authUser.userId}
+                        onBack={() => navigate({ name: 'dashboard' })}
+                    />
+                </Suspense>
             )}
 
             {isSettingsOpen && (
@@ -870,19 +901,23 @@ export default function App() {
 
             {debugEnabled ? <DevTools /> : null}
 
-            <ImportShareDialog
-                isOpen={isImportOpen}
-                isImporting={importBusy}
-                error={importError}
-                onClose={() => {
-                    if (importBusy) {
-                        return;
-                    }
-                    setImportError(null);
-                    setIsImportOpen(false);
-                }}
-                onImport={handleImportSharedTrack}
-            />
+            {isImportOpen ? (
+                <Suspense fallback={null}>
+                    <ImportShareDialog
+                        isOpen={isImportOpen}
+                        isImporting={importBusy}
+                        error={importError}
+                        onClose={() => {
+                            if (importBusy) {
+                                return;
+                            }
+                            setImportError(null);
+                            setIsImportOpen(false);
+                        }}
+                        onImport={handleImportSharedTrack}
+                    />
+                </Suspense>
+            ) : null}
         </div>
     );
 }

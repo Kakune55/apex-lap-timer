@@ -1,4 +1,4 @@
-import { useEffect, Fragment } from 'react';
+import { memo, useEffect, useMemo, Fragment } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { TrackPoint, Track, Gate } from '../types';
@@ -19,18 +19,22 @@ const carIcon = new L.DivIcon({
     iconAnchor: [8, 8]
 });
 
+const defaultCenter: [number, number] = [31.2304, 121.4737];
+
 function MapUpdater({ center, offsetY = 0 }: { center: [number, number], offsetY?: number }) {
     const map = useMap();
+
     useEffect(() => {
         if (offsetY === 0) {
-            map.setView(center, map.getZoom(), { animate: true });
+            map.setView(center, map.getZoom(), { animate: false });
         } else {
             // Add offsetY to move the camera down, which moves the car UP on the screen
             const targetPoint = map.project(center, map.getZoom()).add([0, offsetY]);
             const targetLatLng = map.unproject(targetPoint, map.getZoom());
-            map.setView(targetLatLng, map.getZoom(), { animate: true });
+            map.setView(targetLatLng, map.getZoom(), { animate: false });
         }
     }, [center, map, offsetY]);
+
     return null;
 }
 
@@ -64,7 +68,21 @@ interface Props {
     mode?: MapViewMode;
 }
 
-export function TrackMap({ 
+function renderGate(gate: Gate, color: string) {
+    const R = 6371000;
+    // Convert heading to radians and calculate offsets
+    // Heading is in degrees clockwise from North
+    const rad = (gate.heading + 90) * Math.PI / 180;
+    const dLat = (Math.cos(rad) * (gate.width / 2)) / R * (180 / Math.PI);
+    const dLon = (Math.sin(rad) * (gate.width / 2)) / (R * Math.cos(gate.lat * Math.PI / 180)) * (180 / Math.PI);
+
+    const p1: [number, number] = [gate.lat + dLat, gate.lon + dLon];
+    const p2: [number, number] = [gate.lat - dLat, gate.lon - dLon];
+
+    return <Polyline positions={[p1, p2]} color={color} weight={6} dashArray="10, 10" />;
+}
+
+function TrackMapComponent({ 
     currentPos, 
     recordedPoints = [], 
     referenceTrack = null, 
@@ -72,39 +90,43 @@ export function TrackMap({
     offsetY = 0,
     mode = 'dt-absolute'
 }: Props) {
-    const defaultCenter: [number, number] = [31.2304, 121.4737];
-    const center: [number, number] = currentPos ? [currentPos.lat, currentPos.lon] : defaultCenter;
+    const center = useMemo<[number, number]>(
+        () => (currentPos ? [currentPos.lat, currentPos.lon] : defaultCenter),
+        [currentPos?.lat, currentPos?.lon],
+    );
 
-    const referencePositions: [number, number][] = referenceTrack ? referenceTrack.points.map(p => [p.lat, p.lon]) : [];
+    const referencePositions = useMemo<[number, number][]>(
+        () => (referenceTrack ? referenceTrack.points.map((p) => [p.lat, p.lon]) : []),
+        [referenceTrack],
+    );
 
     // Group recorded points into segments by color based on mode
-    const segments = getColoredSegments(recordedPoints, mode);
+    const segments = useMemo(
+        () => getColoredSegments(recordedPoints, mode),
+        [recordedPoints, mode],
+    );
 
-    const autoFocusPoints: [number, number][] = [
-        ...recordedPoints.map((p) => [p.lat, p.lon] as [number, number]),
-        ...referencePositions,
-        ...(startGate ? [[startGate.lat, startGate.lon] as [number, number]] : []),
-        ...(referenceTrack?.startGate ? [[referenceTrack.startGate.lat, referenceTrack.startGate.lon] as [number, number]] : []),
-        ...(referenceTrack?.finishGate ? [[referenceTrack.finishGate.lat, referenceTrack.finishGate.lon] as [number, number]] : []),
-        ...(referenceTrack?.sectors?.map((sector) => [sector.lat, sector.lon] as [number, number]) ?? []),
-    ];
-
-    const renderGate = (gate: Gate, color: string) => {
-        const R = 6371000;
-        // Convert heading to radians and calculate offsets
-        // Heading is in degrees clockwise from North
-        const rad = (gate.heading + 90) * Math.PI / 180;
-        const dLat = (Math.cos(rad) * (gate.width / 2)) / R * (180 / Math.PI);
-        const dLon = (Math.sin(rad) * (gate.width / 2)) / (R * Math.cos(gate.lat * Math.PI / 180)) * (180 / Math.PI);
-
-        const p1: [number, number] = [gate.lat + dLat, gate.lon + dLon];
-        const p2: [number, number] = [gate.lat - dLat, gate.lon - dLon];
-
-        return <Polyline positions={[p1, p2]} color={color} weight={6} dashArray="10, 10" />;
-    };
+    const autoFocusPoints = useMemo<[number, number][]>(
+        () => [
+            ...recordedPoints.map((p) => [p.lat, p.lon] as [number, number]),
+            ...referencePositions,
+            ...(startGate ? [[startGate.lat, startGate.lon] as [number, number]] : []),
+            ...(referenceTrack?.startGate ? [[referenceTrack.startGate.lat, referenceTrack.startGate.lon] as [number, number]] : []),
+            ...(referenceTrack?.finishGate ? [[referenceTrack.finishGate.lat, referenceTrack.finishGate.lon] as [number, number]] : []),
+            ...(referenceTrack?.sectors?.map((sector) => [sector.lat, sector.lon] as [number, number]) ?? []),
+        ],
+        [recordedPoints, referencePositions, startGate, referenceTrack],
+    );
 
     return (
-        <MapContainer center={center} zoom={18} style={{ height: '100%', width: '100%', zIndex: 10, background: '#090a0b' }} zoomControl={false} attributionControl={false}>
+        <MapContainer
+            center={center}
+            zoom={18}
+            style={{ height: '100%', width: '100%', zIndex: 10, background: '#090a0b' }}
+            zoomControl={false}
+            attributionControl={false}
+            preferCanvas={true}
+        >
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -140,4 +162,5 @@ export function TrackMap({
     );
 }
 
+export const TrackMap = memo(TrackMapComponent);
 
