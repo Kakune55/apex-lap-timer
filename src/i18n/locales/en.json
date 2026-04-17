@@ -133,8 +133,7 @@
     },
     "portrait": {
       "title": "Wide Screen Required",
-      "heading": "Use Dashboard on a wide-screen device",
-      "description": "Dashboard is positioned as a professional information surface and is not optimized for portrait layouts. Switch to landscape or desktop to continue."
+      "heading": "Use Dashboard on a wide-screen device"
     },
     "placeholders": {
       "liveFeed": {

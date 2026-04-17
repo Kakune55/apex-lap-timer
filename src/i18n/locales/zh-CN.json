@@ -133,8 +133,7 @@
     },
     "portrait": {
       "title": "宽屏提示",
-      "heading": "请到宽屏设备上使用 Dashboard",
-      "description": "Dashboard 定位为专业信息展示后台，不针对竖屏设备做展示优化。请切换到横屏或桌面端后继续使用。"
+      "heading": "请到宽屏设备上使用 Dashboard"
     },
     "placeholders": {
       "liveFeed": {

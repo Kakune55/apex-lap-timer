@@ -39,9 +39,6 @@ export function DashboardView({
                             {t('dashboard.portrait.title')}
                         </div>
                         <h2 className="mt-3 text-3xl font-semibold">{t('dashboard.portrait.heading')}</h2>
-                        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-text-secondary">
-                            {t('dashboard.portrait.description')}
-                        </p>
                         <button onClick={onBackToMobile} className="mt-7 inline-flex items-center gap-2 rounded-2xl apex-btn-secondary px-5 py-3">
                             <ArrowLeft size={18} />
                             {t('dashboard.backToMobile')}
