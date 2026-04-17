@@ -3,11 +3,12 @@ import { useViewportMetrics } from '../hooks/useViewportMetrics';
 import { Track, Lap, TrackPoint } from '../types';
 import { TrackMap } from './TrackMap';
 import { formatTime, projectToTrackDistance } from '../utils/geo';
-import { ArrowLeft, History, Map as MapIcon, Trophy, Ruler, Edit3, X, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, History, Map as MapIcon, Trophy, Ruler, Edit3, X, Plus, Trash2, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapViewMode, getNextMapViewMode } from '../utils/map';
 import { MapModeToggle } from './MapModeToggle';
 import { LapAnalysisCharts } from './LapAnalysisCharts';
+import { TrackShareDialog } from './TrackShareDialog';
 import { useI18n } from '../i18n';
 
 interface Props {
@@ -25,6 +26,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     const [isEditingSectors, setIsEditingSectors] = useState(false);
     const [visibleLapCount, setVisibleLapCount] = useState(LAP_HISTORY_BATCH);
     const [pendingDeleteLap, setPendingDeleteLap] = useState<Lap | null>(null);
+    const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
     const { t, formatDateTime } = useI18n();
 
     const reversedLaps = useMemo(() => [...(track.laps ?? [])].reverse(), [track.laps]);
@@ -257,7 +259,16 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                             </div>
                         )}
                     </div>
-                    <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setIsShareDialogOpen(true)}
+                            className="p-3 apex-pill hover:bg-white/20 transition-colors"
+                            title={t('share.title')}
+                        >
+                            <Share2 size={18} />
+                        </button>
+                        <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
+                    </div>
                 </div>
             </div>
 
@@ -492,6 +503,11 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     </div>
                 </div>
             )}
+            <TrackShareDialog
+                isOpen={isShareDialogOpen}
+                track={track}
+                onClose={() => setIsShareDialogOpen(false)}
+            />
         </div>
     );
 }

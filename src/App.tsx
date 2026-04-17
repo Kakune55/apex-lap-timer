@@ -6,11 +6,13 @@ import { RaceMode } from './components/RaceMode';
 import { TrackDetails } from './components/TrackDetails';
 import { AdminPanel } from './components/AdminPanel';
 import { DashboardView } from './components/DashboardView';
+import { ImportShareDialog } from './components/ImportShareDialog';
 import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
-import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X, LogOut } from 'lucide-react';
+import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X, LogOut, Download } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
 import { AuthError, getCurrentUser, login, logout, SessionUser } from './sync/auth';
 import { Locale, useI18n } from './i18n';
+import { parseTrackShareInput } from './utils/trackShare';
 
 const WAKE_LOCK_STORAGE_KEY = 'apex_keep_screen_awake';
 type WakeLockErrorKey = 'unsupported' | 'failed';
@@ -123,6 +125,9 @@ export default function App() {
     const [loginPassword, setLoginPassword] = useState('');
     const [loginBusy, setLoginBusy] = useState(false);
     const [loginError, setLoginError] = useState<LoginErrorKey | null>(null);
+    const [isImportOpen, setIsImportOpen] = useState(false);
+    const [importBusy, setImportBusy] = useState(false);
+    const [importError, setImportError] = useState<string | null>(null);
 
     const normalizeTracks = (incoming: Track[]) => {
         const now = Date.now();
@@ -273,6 +278,43 @@ export default function App() {
     const handleViewDetails = (track: Track) => {
         setSelectedTrack(track);
         setView('details');
+    };
+
+    const openImportDialog = () => {
+        setImportError(null);
+        setIsSettingsOpen(false);
+        setIsImportOpen(true);
+    };
+
+    const handleImportSharedTrack = async (input: string) => {
+        if (!input.trim()) {
+            setImportError(t('share.import.errors.empty'));
+            return;
+        }
+
+        setImportBusy(true);
+        setImportError(null);
+
+        try {
+            const parsed = await parseTrackShareInput(input);
+            const importedTrack = {
+                ...parsed.track,
+                updatedAt: Date.now(),
+            };
+            persistTracks([importedTrack, ...tracksRef.current]);
+            syncRef.current?.queueUpsert(importedTrack);
+            setSelectedTrack(importedTrack);
+            setView('details');
+            setIsImportOpen(false);
+        } catch (error) {
+            const key =
+                error instanceof Error && error.message === 'decompression_unsupported'
+                    ? 'unsupported'
+                    : 'invalid';
+            setImportError(t(`share.import.errors.${key}`));
+        } finally {
+            setImportBusy(false);
+        }
     };
 
     const handleBackToHome = () => {
@@ -688,6 +730,20 @@ export default function App() {
                             </div>
 
                             <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.trackShare.title')}</div>
+                                <p className="text-[10px] text-text-secondary">{t('app.settings.trackShare.description')}</p>
+                                <button
+                                    onClick={openImportDialog}
+                                    className="w-full rounded-xl bg-white/10 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/15"
+                                >
+                                    <span className="inline-flex items-center gap-2">
+                                        <Download size={16} />
+                                        {t('app.settings.trackShare.import')}
+                                    </span>
+                                </button>
+                            </div>
+
+                            <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
                                 <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.language')}</div>
                                 <div className="grid grid-cols-2 gap-2">
                                     {(['en', 'zh-CN'] as Locale[]).map((language) => (
@@ -771,6 +827,20 @@ export default function App() {
             )}
 
             {debugEnabled ? <DevTools /> : null}
+
+            <ImportShareDialog
+                isOpen={isImportOpen}
+                isImporting={importBusy}
+                error={importError}
+                onClose={() => {
+                    if (importBusy) {
+                        return;
+                    }
+                    setImportError(null);
+                    setIsImportOpen(false);
+                }}
+                onImport={handleImportSharedTrack}
+            />
         </div>
     );
 }

@@ -80,6 +80,11 @@
       "desktopModeCurrent": "当前位于 Dashboard",
       "backToMobile": "返回移动端",
       "locationRefreshRate": "定位刷新频率",
+      "trackShare": {
+        "title": "赛道分享",
+        "description": "从好友分享文本中导入赛道。导出分享仍在赛道详情页发起。",
+        "import": "导入分享赛道"
+      },
       "language": "语言",
       "debugTools": "调试工具",
       "toggleDebugTools": "切换调试工具",
@@ -222,9 +227,51 @@
     "settings": "设置",
     "newTrack": "新建赛道",
     "createNewTrack": "创建新赛道",
+    "importShare": "导入分享",
     "emptyTitle": "还没有记录赛道",
     "emptyDescription": "先录制一条环形或冲刺赛道，再开始计时。",
     "viewDetails": "查看详情"
+  },
+  "share": {
+    "title": "分享赛道",
+    "summaryWithRecords": "分享这条赛道，并附带 {{count}} 条单圈记录。",
+    "summaryTrackOnly": "只分享赛道线路和参考圈，不包含历史单圈记录。",
+    "includeRecords": "包含单圈记录",
+    "includeRecordsHelp": "关闭后只会分享路线与参考计时，不附带历史圈速。",
+    "includeRecordsOn": "含记录",
+    "includeRecordsOff": "仅赛道",
+    "code": "分享文本",
+    "generating": "正在生成",
+    "copy": "复制",
+    "systemShare": "系统分享",
+    "messageTitle": "Apex Lap Timer 赛道：{{track}}",
+    "messageMeta": "模式：{{mode}} | 导出时间：{{time}}",
+    "feedback": {
+      "copied": "分享文本已复制。",
+      "shared": "已完成系统分享。",
+      "copyFailed": "写入剪贴板失败，请手动复制下方文本。",
+      "shareFailed": "系统分享失败，请改用复制。"
+    },
+    "errors": {
+      "generateFailed": "无法生成分享文本。"
+    },
+    "import": {
+      "title": "导入分享赛道",
+      "heading": "粘贴分享码",
+      "description": "把好友发来的分享文本粘贴到这里，导入后会保存为一条新的本地赛道。",
+      "code": "分享码",
+      "placeholder": "在这里粘贴完整分享文本，或直接粘贴 APEXTRACK 开头的分享码",
+      "paste": "粘贴",
+      "pasted": "已从剪贴板粘贴。",
+      "pasteFailed": "读取剪贴板失败，请手动粘贴。",
+      "confirm": "导入赛道",
+      "importing": "导入中",
+      "errors": {
+        "empty": "请先粘贴分享码。",
+        "invalid": "分享码无效或内容不完整。",
+        "unsupported": "当前浏览器无法读取该压缩分享格式。"
+      }
+    }
   },
   "recordTrack": {
     "title": "录制赛道",

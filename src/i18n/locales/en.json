@@ -80,6 +80,11 @@
       "desktopModeCurrent": "Dashboard Active",
       "backToMobile": "Back to Mobile",
       "locationRefreshRate": "Location Refresh Rate",
+      "trackShare": {
+        "title": "Track Sharing",
+        "description": "Import a shared track from a friend. Export still starts from the track details page.",
+        "import": "Import Shared Track"
+      },
       "language": "Language",
       "debugTools": "Debug Tools",
       "toggleDebugTools": "Toggle debug tools",
@@ -222,9 +227,51 @@
     "settings": "Settings",
     "newTrack": "New Track",
     "createNewTrack": "Create new track",
+    "importShare": "Import Share",
     "emptyTitle": "No tracks recorded",
     "emptyDescription": "Record a circuit or sprint track to start racing.",
     "viewDetails": "View Details"
+  },
+  "share": {
+    "title": "Share Track",
+    "summaryWithRecords": "Share this track with {{count}} lap records.",
+    "summaryTrackOnly": "Share only the track layout and reference lap, without lap history.",
+    "includeRecords": "Include lap records",
+    "includeRecordsHelp": "Turn this off if you only want to share the route and timing reference.",
+    "includeRecordsOn": "With records",
+    "includeRecordsOff": "Track only",
+    "code": "Share Text",
+    "generating": "Generating",
+    "copy": "Copy",
+    "systemShare": "System Share",
+    "messageTitle": "Apex Lap Timer track: {{track}}",
+    "messageMeta": "Mode: {{mode}} | Exported: {{time}}",
+    "feedback": {
+      "copied": "Share text copied.",
+      "shared": "Shared successfully.",
+      "copyFailed": "Clipboard write failed. Copy the text manually.",
+      "shareFailed": "System share failed. Try copy instead."
+    },
+    "errors": {
+      "generateFailed": "Unable to generate share text."
+    },
+    "import": {
+      "title": "Import Shared Track",
+      "heading": "Paste a share code",
+      "description": "Paste the text your friend sent. The imported track will be saved as a new local track.",
+      "code": "Share Code",
+      "placeholder": "Paste the full shared text or the APEXTRACK code here",
+      "paste": "Paste",
+      "pasted": "Clipboard pasted.",
+      "pasteFailed": "Clipboard read failed. Paste manually.",
+      "confirm": "Import Track",
+      "importing": "Importing",
+      "errors": {
+        "empty": "Paste a share code first.",
+        "invalid": "This share code is invalid or incomplete.",
+        "unsupported": "This browser cannot read the compressed share format."
+      }
+    }
   },
   "recordTrack": {
     "title": "Record Track",
