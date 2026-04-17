@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type FormEvent } from 'react';
 import { Track } from './types';
 import { TrackList } from './components/TrackList';
 import { RecordTrack } from './components/RecordTrack';
@@ -13,17 +13,34 @@ import { createCloudSync, SyncStatus } from './sync/cloudSync';
 import { AuthError, getCurrentUser, login, logout, SessionUser } from './sync/auth';
 import { Locale, useI18n } from './i18n';
 import { parseTrackShareInput } from './utils/trackShare';
+import { type AppRoute, useAppRoute } from './navigation/appRouter';
 
 const WAKE_LOCK_STORAGE_KEY = 'apex_keep_screen_awake';
 type WakeLockErrorKey = 'unsupported' | 'failed';
 type LoginErrorKey = 'missingCredentials' | 'invalidCredentials' | 'loginFailed';
-type AppView = 'home' | 'record' | 'race' | 'details' | 'dashboard' | 'admin';
 
 type WakeLockNavigator = Navigator & {
     wakeLock?: {
         request(type: 'screen'): Promise<WakeLockSentinel>;
     };
 };
+
+function getRouteTitle(route: AppRoute, trackName: string | null, t: ReturnType<typeof useI18n>['t']) {
+    switch (route.name) {
+        case 'home':
+            return t('trackList.title');
+        case 'record':
+            return t('recordTrack.title');
+        case 'track-details':
+            return trackName ?? t('trackList.viewDetails');
+        case 'track-race':
+            return trackName ?? t('trackList.title');
+        case 'dashboard':
+            return t('dashboard.title');
+        case 'admin':
+            return t('admin.title');
+    }
+}
 
 function DevTools() {
     const { simMode, simSpeed, toggleSimulation, setSimulationSpeed } = useGPS();
@@ -85,9 +102,9 @@ function DevTools() {
 
 export default function App() {
     const { locale, setLocale, t } = useI18n();
-    const [view, setView] = useState<AppView>('home');
+    const { route, navigate, replace } = useAppRoute();
     const [tracks, setTracks] = useState<Track[]>([]);
-    const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
+    const [tracksReady, setTracksReady] = useState(false);
     const [syncStatus, setSyncStatus] = useState<SyncStatus>({
         state: 'idle',
         pending: 0,
@@ -129,26 +146,32 @@ export default function App() {
     const [importBusy, setImportBusy] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
 
-    const normalizeTracks = (incoming: Track[]) => {
+    const normalizeTracks = useCallback((incoming: Track[]) => {
         const now = Date.now();
         return incoming.map((track) => ({
             ...track,
             updatedAt: track.updatedAt ?? now,
         }));
-    };
+    }, []);
 
-    const persistTracks = (nextTracks: Track[]) => {
+    const persistTracks = useCallback((nextTracks: Track[]) => {
         const normalized = normalizeTracks(nextTracks);
         tracksRef.current = normalized;
         setTracks(normalized);
         localStorage.setItem('apex_tracks', JSON.stringify(normalized));
-        setSelectedTrack((prev) => {
-            if (!prev) {
-                return null;
-            }
-            return normalized.find((track) => track.id === prev.id) ?? null;
-        });
-    };
+    }, [normalizeTracks]);
+
+    const routeTrackId =
+        route.name === 'track-details' || route.name === 'track-race'
+            ? route.trackId
+            : null;
+
+    const activeTrack = useMemo(() => {
+        if (!routeTrackId) {
+            return null;
+        }
+        return tracks.find((track) => track.id === routeTrackId) ?? null;
+    }, [routeTrackId, tracks]);
 
     useEffect(() => {
         const saved = localStorage.getItem('apex_tracks');
@@ -159,6 +182,7 @@ export default function App() {
                 console.error('Failed to parse tracks', e);
             }
         }
+        setTracksReady(true);
 
         let disposed = false;
         void (async () => {
@@ -181,7 +205,7 @@ export default function App() {
         return () => {
             disposed = true;
         };
-    }, []);
+    }, [persistTracks]);
 
     useEffect(() => {
         if (!authUser) {
@@ -218,13 +242,31 @@ export default function App() {
                 hideSyncTimeoutRef.current = null;
             }
         };
-    }, [authUser]);
+    }, [authUser, persistTracks]);
 
     useEffect(() => {
-        if (authUser && !authUser.dashboardAccess && (view === 'dashboard' || view === 'admin')) {
-            setView('home');
+        if (!tracksReady || !routeTrackId) {
+            return;
         }
-    }, [authUser, view]);
+        if (!activeTrack) {
+            replace({ name: 'home' });
+        }
+    }, [activeTrack, replace, routeTrackId, tracksReady]);
+
+    useEffect(() => {
+        if (authLoading || !authUser) {
+            return;
+        }
+
+        if (route.name === 'dashboard' && !authUser.dashboardAccess) {
+            replace({ name: 'home' });
+            return;
+        }
+
+        if (route.name === 'admin' && !authUser.isAdmin) {
+            replace(authUser.dashboardAccess ? { name: 'dashboard' } : { name: 'home' });
+        }
+    }, [authLoading, authUser, replace, route.name]);
 
     useEffect(() => {
         if (hideSyncTimeoutRef.current !== null) {
@@ -249,11 +291,20 @@ export default function App() {
         };
     }, [syncStatus.state]);
 
+    useEffect(() => {
+        setIsSettingsOpen(false);
+    }, [route.name]);
+
+    useEffect(() => {
+        const title = getRouteTitle(route, activeTrack?.name ?? null, t);
+        document.title = `${title} | Apex Lap Timer`;
+    }, [activeTrack?.name, route, t]);
+
     const handleSaveTrack = (track: Track) => {
         const newTrack = { ...track, updatedAt: Date.now() };
         persistTracks([...tracksRef.current, newTrack]);
         syncRef.current?.queueUpsert(newTrack);
-        setView('home');
+        navigate({ name: 'home' });
     };
 
     const requestDeleteTrack = (track: Track) => {
@@ -265,19 +316,12 @@ export default function App() {
             return;
         }
         const id = pendingDeleteTrack.id;
-        persistTracks(tracksRef.current.filter((t) => t.id !== id));
+        persistTracks(tracksRef.current.filter((track) => track.id !== id));
         syncRef.current?.queueDelete(id, Date.now());
         setPendingDeleteTrack(null);
-    };
-
-    const handleSelectTrack = (track: Track) => {
-        setSelectedTrack(track);
-        setView('race');
-    };
-
-    const handleViewDetails = (track: Track) => {
-        setSelectedTrack(track);
-        setView('details');
+        if (routeTrackId === id) {
+            replace({ name: 'home' });
+        }
     };
 
     const openImportDialog = () => {
@@ -303,9 +347,8 @@ export default function App() {
             };
             persistTracks([importedTrack, ...tracksRef.current]);
             syncRef.current?.queueUpsert(importedTrack);
-            setSelectedTrack(importedTrack);
-            setView('details');
             setIsImportOpen(false);
+            navigate({ name: 'track-details', trackId: importedTrack.id });
         } catch (error) {
             const key =
                 error instanceof Error && error.message === 'decompression_unsupported'
@@ -318,18 +361,14 @@ export default function App() {
     };
 
     const handleBackToHome = () => {
-        setView('home');
-        setSelectedTrack(null);
+        navigate({ name: 'home' });
     };
 
     const handleUpdateTrack = (updatedTrack: Track) => {
         const next = { ...updatedTrack, updatedAt: Date.now() };
-        const newTracks = tracksRef.current.map((t) => (t.id === next.id ? next : t));
+        const newTracks = tracksRef.current.map((track) => (track.id === next.id ? next : track));
         persistTracks(newTracks);
         syncRef.current?.queueUpsert(next);
-        if (selectedTrack?.id === updatedTrack.id) {
-            setSelectedTrack(next);
-        }
     };
 
     const formatSyncTime = (timestamp: number | null) => {
@@ -481,19 +520,18 @@ export default function App() {
             return;
         }
         setIsSettingsOpen(false);
-        setView('dashboard');
-        setSelectedTrack(null);
+        navigate({ name: 'dashboard' });
     };
 
     const handleBackToMobile = () => {
-        setView('home');
+        navigate({ name: 'home' });
     };
 
     const handleOpenAdmin = () => {
         if (!authUser?.isAdmin) {
             return;
         }
-        setView('admin');
+        navigate({ name: 'admin' });
     };
 
     const gpsRateSupported = isGPSRefreshRateSupported();
@@ -521,11 +559,10 @@ export default function App() {
     const handleLogout = async () => {
         await logout();
         setAuthUser(null);
-        setView('home');
-        setSelectedTrack(null);
         setLoginPassword('');
         setLoginError(null);
         setIsSettingsOpen(false);
+        navigate({ name: 'home' });
     };
 
     const loginErrorText =
@@ -601,37 +638,41 @@ export default function App() {
                 <span className="text-[10px] text-white/50 compact-hide">{formatSyncTime(syncStatus.lastSyncAt)}</span>
             </div>
 
-            {view === 'home' && (
+            {route.name === 'home' && (
                 <TrackList
                     tracks={tracks}
-                    onSelect={handleSelectTrack}
+                    onSelect={(track) => navigate({ name: 'track-race', trackId: track.id })}
                     onDelete={requestDeleteTrack}
-                    onViewDetails={handleViewDetails}
-                    onCreateNew={() => setView('record')}
+                    onViewDetails={(track) => navigate({ name: 'track-details', trackId: track.id })}
+                    onCreateNew={() => navigate({ name: 'record' })}
                     onOpenSettings={() => setIsSettingsOpen(true)}
                 />
             )}
-            {view === 'record' && (
+
+            {route.name === 'record' && (
                 <RecordTrack
                     onSave={handleSaveTrack}
                     onCancel={handleBackToHome}
                 />
             )}
-            {view === 'details' && selectedTrack && (
+
+            {route.name === 'track-details' && activeTrack && (
                 <TrackDetails
-                    track={selectedTrack}
+                    track={activeTrack}
                     onBack={handleBackToHome}
                     onUpdateTrack={handleUpdateTrack}
                 />
             )}
-            {view === 'race' && selectedTrack && (
+
+            {route.name === 'track-race' && activeTrack && (
                 <RaceMode
-                    track={selectedTrack}
+                    track={activeTrack}
                     onBack={handleBackToHome}
                     onUpdateTrack={handleUpdateTrack}
                 />
             )}
-            {view === 'dashboard' && (
+
+            {route.name === 'dashboard' && authUser.dashboardAccess && (
                 <DashboardView
                     authUser={authUser}
                     tracksCount={tracks.length}
@@ -642,10 +683,11 @@ export default function App() {
                     onOpenAdmin={handleOpenAdmin}
                 />
             )}
-            {view === 'admin' && (
+
+            {route.name === 'admin' && authUser.isAdmin && (
                 <AdminPanel
                     currentUserId={authUser.userId}
-                    onBack={() => setView('dashboard')}
+                    onBack={() => navigate({ name: 'dashboard' })}
                 />
             )}
 
@@ -696,9 +738,9 @@ export default function App() {
                                         disabled={!authUser.dashboardAccess}
                                         className="flex-1 rounded-xl bg-accent-green px-4 py-3 text-sm font-bold text-black transition-colors hover:brightness-110 disabled:opacity-40"
                                     >
-                                        {view === 'dashboard' || view === 'admin' ? t('app.settings.desktopModeCurrent') : t('app.settings.enterDesktop')}
+                                        {route.name === 'dashboard' || route.name === 'admin' ? t('app.settings.desktopModeCurrent') : t('app.settings.enterDesktop')}
                                     </button>
-                                    {(view === 'dashboard' || view === 'admin') ? (
+                                    {(route.name === 'dashboard' || route.name === 'admin') ? (
                                         <button
                                             onClick={() => {
                                                 setIsSettingsOpen(false);
