@@ -145,7 +145,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                     <Activity size={14} className="text-accent-green" />
                     Speed (km/h)
                 </div>
-                <div className="h-48 w-full">
+                <div className="app-chart-sm">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={chartData} syncId="lapAnalysis" margin={chartMargin}>
                             <defs>
@@ -205,7 +205,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                     <Zap size={14} className="text-accent-red" />
                     G-Force Analysis
                 </div>
-                <div className="h-56 w-full">
+                <div className="app-chart-lg">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={chartData} syncId="lapAnalysis" margin={chartMargin}>
                             <defs>
@@ -290,4 +290,3 @@ export function LapAnalysisCharts({ lap }: Props) {
         </div>
     );
 }
-

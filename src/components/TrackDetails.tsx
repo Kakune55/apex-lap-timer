@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useViewportMetrics } from '../hooks/useViewportMetrics';
 import { Track, Lap, TrackPoint } from '../types';
 import { TrackMap } from './TrackMap';
 import { formatTime, projectToTrackDistance } from '../utils/geo';
@@ -17,6 +18,7 @@ interface Props {
 export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     const MAX_SECTOR_GATES = 2;
     const LAP_HISTORY_BATCH = 10;
+    const { isNarrow } = useViewportMetrics();
     const [selectedLap, setSelectedLap] = useState<Lap | null>(null);
     const [mapMode, setMapMode] = useState<MapViewMode>('dt-absolute');
     const [isEditingSectors, setIsEditingSectors] = useState(false);
@@ -238,27 +240,29 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     return (
         <div className="relative h-full flex flex-col bg-bg-color text-white overflow-hidden">
             {/* Header */}
-            <div className="absolute inset-x-0 top-0 z-30 px-6 pb-3 pt-[calc(var(--safe-top)+0.5rem)] flex justify-between items-center bg-linear-to-b from-black/80 to-transparent">
-                <button 
-                    onClick={onBack}
-                    className="p-3 apex-pill hover:bg-white/20 transition-colors"
-                >
-                    <ArrowLeft size={24} />
-                </button>
-                <div className="text-center">
-                    <h2 className="text-xl font-bold tracking-tight">{track.name}</h2>
-                    {selectedLap && (
-                        <div className="text-[10px] font-bold text-accent-green uppercase tracking-widest">
-                            Analyzing Lap: {formatTime(selectedLap.time)}
-                        </div>
-                    )}
+            <div className="absolute inset-x-0 top-0 z-30 bg-linear-to-b from-black/80 to-transparent pb-3 pt-[calc(var(--safe-top)+0.5rem)]">
+                <div className="app-shell-wide flex justify-between items-center gap-3">
+                    <button 
+                        onClick={onBack}
+                        className="p-3 apex-pill hover:bg-white/20 transition-colors"
+                    >
+                        <ArrowLeft size={24} />
+                    </button>
+                    <div className="min-w-0 text-center">
+                        <h2 className="truncate text-xl font-bold tracking-tight">{track.name}</h2>
+                        {selectedLap && (
+                            <div className="text-[10px] font-bold text-accent-green uppercase tracking-widest">
+                                Analyzing Lap: {formatTime(selectedLap.time)}
+                            </div>
+                        )}
+                    </div>
+                    <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
                 </div>
-                <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
             </div>
 
-            <div className="relative z-20 flex-1 overflow-y-auto pb-20">
+            <div className="relative z-20 flex-1 overflow-y-auto pb-[calc(var(--safe-bottom)+5rem)]">
                 {/* Map Section */}
-                <div className="h-96 relative">
+                <div className="app-details-map relative">
                     <TrackMap 
                         currentPos={null} 
                         referenceTrack={selectedLap ? null : track} 
@@ -274,9 +278,9 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     </div>
                 </div>
 
-                <div className="px-6 -mt-12 relative z-10 space-y-6">
+                <div className="app-shell-wide app-details-stack relative z-10 space-y-6">
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid grid-cols-2 gap-4 ${isNarrow ? 'compact-stack' : ''}`}>
                         <div className="apex-panel p-5 rounded-3xl">
                             <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-2">
                                 <Trophy size={14} className="text-accent-green" />
@@ -466,7 +470,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
             </div>
             {pendingDeleteLap && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPendingDeleteLap(null)}>
-                    <div className="apex-panel w-full max-w-sm rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
+                    <div className="apex-panel w-full max-w-sm max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
                         <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">Delete Lap Record</div>
                         <div className="text-lg font-semibold mb-1">{formatTime(pendingDeleteLap.time)}</div>
                         <p className="text-sm text-text-secondary mb-5">This lap will be removed permanently from history.</p>

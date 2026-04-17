@@ -25,7 +25,7 @@ function DevTools() {
         return (
             <button
                 onClick={() => setIsOpen(true)}
-                className={`fixed bottom-6 right-6 p-4 rounded-full shadow-2xl z-50 transition-colors ${
+                className={`fixed app-floating-action p-4 rounded-full shadow-2xl z-50 transition-colors ${
                     simMode ? 'bg-accent-green text-black' : 'apex-pill text-white hover:bg-white/20'
                 }`}
             >
@@ -35,7 +35,7 @@ function DevTools() {
     }
 
     return (
-        <div className="fixed bottom-6 right-6 bg-black/90 backdrop-blur-xl border border-white/10 p-5 rounded-3xl shadow-2xl z-50 w-64">
+        <div className="fixed app-floating-action bg-black/90 backdrop-blur-xl border border-white/10 p-5 rounded-3xl shadow-2xl z-50 w-64 max-w-[calc(100vw-var(--safe-left)-var(--safe-right)-2rem)]">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-sm uppercase tracking-widest text-text-secondary">Dev Tools</h3>
                 <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white">✕</button>
@@ -506,14 +506,14 @@ export default function App() {
 
     return (
         <div className="h-full bg-bg-color text-white selection:bg-white/20 overflow-hidden">
-            <div className={`fixed bottom-6 right-24 z-40 flex items-center gap-2 rounded-2xl apex-glass px-3 py-2 text-xs shadow-xl transition-all duration-500 ${showSyncIndicator ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+            <div className={`fixed app-floating-status z-40 flex items-center gap-2 rounded-2xl apex-glass px-3 py-2 text-xs shadow-xl transition-all duration-500 ${showSyncIndicator ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
                 <Cloud size={14} className="text-white/60" />
                 <SyncIcon size={14} className={`${syncAccentClass} ${syncStatus.state === 'syncing' ? 'animate-spin' : ''}`} />
-                <span className="font-medium text-white/90">{syncText}</span>
+                <span className="min-w-0 truncate font-medium text-white/90">{syncText}</span>
                 {syncStatus.pending > 0 ? (
                     <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/80">{syncStatus.pending} queued</span>
                 ) : null}
-                <span className="text-[10px] text-white/50">{formatSyncTime(syncStatus.lastSyncAt)}</span>
+                <span className="text-[10px] text-white/50 compact-hide">{formatSyncTime(syncStatus.lastSyncAt)}</span>
             </div>
             {view === 'home' && (
                 <TrackList
@@ -548,7 +548,7 @@ export default function App() {
             {isSettingsOpen && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}>
                     <div
-                        className="absolute top-[calc(var(--safe-top)+3.5rem)] left-4 right-4 sm:left-6 sm:right-auto sm:w-90 apex-panel rounded-3xl p-5"
+                        className="absolute top-[calc(var(--safe-top)+3.5rem)] left-4 right-4 sm:left-6 sm:right-auto sm:w-90 max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-5rem)] overflow-y-auto apex-panel rounded-3xl p-5"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4">
@@ -637,7 +637,7 @@ export default function App() {
             )}
             {pendingDeleteTrack && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPendingDeleteTrack(null)}>
-                    <div className="apex-panel w-full max-w-sm rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
+                    <div className="apex-panel w-full max-w-sm max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
                         <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">Confirm Delete</div>
                         <div className="text-lg font-semibold mb-1 truncate">{pendingDeleteTrack.name}</div>
                         <p className="text-sm text-text-secondary mb-5">This track and its lap history will be removed.</p>
@@ -662,4 +662,3 @@ export default function App() {
         </div>
     );
 }
-

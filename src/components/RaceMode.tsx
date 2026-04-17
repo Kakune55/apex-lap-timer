@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
+import { useViewportMetrics } from '../hooks/useViewportMetrics';
 import { Track, TrackPoint, Lap } from '../types';
 import {
     getDistance,
@@ -25,6 +26,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const MAX_SECTOR_SEGMENTS = 3;
     const MAX_SECTOR_GATES = MAX_SECTOR_SEGMENTS - 1;
     const { data: gps } = useGPS();
+    const { mapOffsetY, isShort, isNarrow } = useViewportMetrics();
     const [raceState, setRaceState] = useState<'waiting' | 'racing' | 'finished'>('waiting');
     const [startTime, setStartTime] = useState(0);
     const [currentDistance, setCurrentDistance] = useState(0);
@@ -504,42 +506,44 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     currentPos={gps} 
                     referenceTrack={track} 
                     recordedPoints={recordedPoints} 
-                    offsetY={150} 
+                    offsetY={mapOffsetY} 
                     mode={mapMode}
                 />
                 <div className="absolute inset-0 bg-linear-to-t from-bg-color/60 via-transparent to-transparent z-10 pointer-events-none"></div>
             </div>
 
             {/* Header */}
-            <div className="relative z-20 px-6 pb-4 pt-[calc(var(--safe-top)+0.5rem)] flex items-center justify-between">
-                <button onClick={onBack} className="p-3 apex-pill hover:bg-white/10 transition-colors">
-                    <ChevronLeft size={24} />
-                </button>
-                <div className="text-center apex-pill px-6 py-2">
-                    <h2 className="text-sm font-bold uppercase tracking-widest text-text-secondary">{track.name}</h2>
-                    <div className="text-xs text-white mt-0.5 font-medium">
-                        {raceState === 'waiting' ? 'APPROACH START LINE' : raceState === 'finished' ? 'FINISHED' : 'RACING'}
+            <div className="relative z-20 pt-[calc(var(--safe-top)+0.5rem)] pb-4">
+                <div className="app-shell flex items-center justify-between gap-3">
+                    <button onClick={onBack} className="p-3 apex-pill hover:bg-white/10 transition-colors">
+                        <ChevronLeft size={24} />
+                    </button>
+                    <div className="min-w-0 text-center apex-pill px-4 sm:px-6 py-2">
+                        <h2 className="truncate text-sm font-bold uppercase tracking-widest text-text-secondary">{track.name}</h2>
+                        <div className="text-xs text-white mt-0.5 font-medium">
+                            {raceState === 'waiting' ? 'APPROACH START LINE' : raceState === 'finished' ? 'FINISHED' : 'RACING'}
+                        </div>
                     </div>
+                    <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
                 </div>
-                <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
             </div>
 
             {/* Main Dashboard */}
-            <div className="relative z-20 flex-1 flex flex-col justify-end px-4 sm:px-6 pb-3 sm:pb-6 max-w-md mx-auto w-full">
+            <div className="relative z-20 app-shell app-safe-bottom flex-1 flex flex-col justify-end pb-3 sm:pb-6">
                 {/* Speed */}
-                <div className="text-center mb-1 sm:mb-2">
-                    <div className="text-[80px] sm:text-[110px] leading-none font-bold font-sans tabular-nums tracking-tighter drop-shadow-2xl">
+                <div className={`text-center ${isShort ? 'mb-1' : 'mb-2'}`}>
+                    <div className="app-speed-number font-bold font-sans tabular-nums tracking-tighter drop-shadow-2xl">
                         {speedKmh}
                     </div>
                     <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-text-secondary mt-0 drop-shadow-md">KM/H</div>
                 </div>
 
                 {/* Time & Delta Grid */}
-                <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-2 sm:mb-3">
+                <div className={`grid grid-cols-2 gap-2 sm:gap-4 mb-2 sm:mb-3 ${isNarrow ? 'compact-stack' : ''}`}>
                     {/* Time */}
                     <div className="apex-panel rounded-2xl p-3 sm:p-5 relative overflow-hidden flex flex-col justify-center">
                         <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Time</div>
-                        <div className="text-2xl sm:text-4xl font-sans font-bold tabular-nums tracking-tighter">
+                        <div className="app-primary-number font-sans font-bold tabular-nums tracking-tighter">
                             {formatTime(currentLapTime)}
                         </div>
                         <div className="text-[13px] sm:text-[15px] text-text-secondary mt-0.5 sm:mt-1 font-sans font-semibold tabular-nums">
@@ -557,7 +561,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     }`}>
                         <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Delta</div>
                         <div className="text-[9px] font-bold uppercase tracking-widest text-text-secondary mb-1">Live Sectors</div>
-                        <div className={`text-2xl sm:text-4xl font-sans font-bold tabular-nums tracking-tighter ${
+                        <div className={`app-primary-number font-sans font-bold tabular-nums tracking-tighter ${
                             raceState === 'waiting' ? 'text-text-secondary' :
                             isFaster ? 'text-accent-green' : 'text-accent-red'
                         }`}>
@@ -650,13 +654,13 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             {/* Sprint Finish Modal */}
             {showSprintModal && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
-                    <div className="apex-panel p-6 sm:p-8 rounded-3xl max-w-md w-full text-center">
+                    <div className="apex-panel p-6 sm:p-8 rounded-3xl max-w-md w-full max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto text-center">
                         <h3 className="text-2xl font-bold mb-2">Sprint Finished!</h3>
-                        <div className="text-5xl font-sans font-bold mb-3 text-accent-green tabular-nums">
+                        <div className="app-recording-number font-sans font-bold mb-3 text-accent-green tabular-nums">
                             {formatTime(sprintTime)}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div className={`grid grid-cols-2 gap-2 mb-4 ${isNarrow ? 'compact-stack' : ''}`}>
                             <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-left">
                                 <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Delta</div>
                                 <div className={`text-lg font-sans font-bold tabular-nums ${sprintDelta <= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
@@ -730,4 +734,3 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
         </div>
     );
 }
-

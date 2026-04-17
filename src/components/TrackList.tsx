@@ -14,8 +14,8 @@ interface Props {
 
 export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateNew, onOpenSettings }: Props) {
     return (
-        <div className="p-3 sm:p-6 max-w-3xl mx-auto w-full h-full overflow-y-auto overscroll-y-contain">
-            <div className="flex items-center justify-between mb-5 sm:mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
+        <div className="app-shell-wide h-full overflow-y-auto overscroll-y-contain pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.5rem)] sm:pb-[calc(var(--safe-bottom)+1.5rem)]">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 mb-5 sm:mb-8">
                 <button
                     onClick={onOpenSettings}
                     className="p-3 apex-pill hover:bg-white/10 transition-colors"
@@ -23,12 +23,14 @@ export function TrackList({ tracks, onSelect, onDelete, onViewDetails, onCreateN
                 >
                     <Settings size={20} />
                 </button>
-                <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-center">Saved Tracks</h1>
+                <h1 className="min-w-0 text-lg sm:text-3xl font-bold tracking-tight text-center">Saved Tracks</h1>
                 <button
                     onClick={onCreateNew}
-                    className="apex-btn-primary px-4 py-2.5 rounded-full flex items-center justify-center gap-2"
+                    className="p-3 rounded-full bg-accent-green text-black hover:brightness-110 transition-colors shadow-lg shrink-0"
+                    title="New Track"
+                    aria-label="Create new track"
                 >
-                    <Plus size={18} /> New Track
+                    <Plus size={20} />
                 </button>
             </div>
 

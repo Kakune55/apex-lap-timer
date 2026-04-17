@@ -18,6 +18,9 @@
 
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
   --bg-color: #0a0a0a;
   --card-bg: #151619;
   --surface-1: #101115;
@@ -28,6 +31,22 @@
   --accent-green: #00FF66;
   --accent-blue: #3B82F6;
   --accent-yellow: #FBBF24;
+  --screen-gutter: clamp(1rem, 4vw, 1.5rem);
+  --screen-bottom-gap: clamp(0.75rem, 2dvh, 1.5rem);
+  --shell-width: min(100%, 28rem);
+  --shell-width-wide: min(100%, 48rem);
+  --details-map-height: clamp(15rem, 38dvh, 24rem);
+  --details-map-overlap: clamp(2rem, 6dvh, 3rem);
+  --chart-height-sm: clamp(10.5rem, 28dvh, 12rem);
+  --chart-height-lg: clamp(12rem, 32dvh, 14rem);
+}
+
+@media (max-height: 760px) {
+  :root {
+    --screen-bottom-gap: clamp(0.5rem, 1.5dvh, 1rem);
+    --details-map-height: clamp(14rem, 34dvh, 21rem);
+    --details-map-overlap: clamp(1.5rem, 4.5dvh, 2.5rem);
+  }
 }
 
 body {
@@ -126,3 +145,74 @@ body,
   font-weight: 700;
 }
 
+.app-shell {
+  width: var(--shell-width);
+  max-width: var(--shell-width);
+  margin-inline: auto;
+  padding-inline: var(--screen-gutter);
+}
+
+.app-shell-wide {
+  width: var(--shell-width-wide);
+  max-width: var(--shell-width-wide);
+  margin-inline: auto;
+  padding-inline: var(--screen-gutter);
+}
+
+.app-safe-bottom {
+  padding-bottom: calc(var(--screen-bottom-gap) + var(--safe-bottom));
+}
+
+.app-floating-action {
+  right: calc(1rem + var(--safe-right));
+  bottom: calc(1rem + var(--safe-bottom));
+}
+
+.app-floating-status {
+  right: calc(clamp(4.75rem, 18vw, 6rem) + var(--safe-right));
+  bottom: calc(1rem + var(--safe-bottom));
+  max-width: min(calc(100vw - var(--safe-left) - var(--safe-right) - 6.5rem), 22rem);
+}
+
+.app-details-map {
+  height: var(--details-map-height);
+}
+
+.app-details-stack {
+  margin-top: calc(var(--details-map-overlap) * -1);
+}
+
+.app-speed-number {
+  font-size: clamp(4.5rem, min(20.5vw, 15dvh), 6.875rem);
+  line-height: 0.9;
+}
+
+.app-primary-number {
+  font-size: clamp(1.75rem, min(9vw, 5.5dvh), 2.5rem);
+  line-height: 1;
+}
+
+.app-recording-number {
+  font-size: clamp(3rem, min(14vw, 9dvh), 3.75rem);
+  line-height: 1;
+}
+
+.app-chart-sm {
+  height: var(--chart-height-sm);
+  width: 100%;
+}
+
+.app-chart-lg {
+  height: var(--chart-height-lg);
+  width: 100%;
+}
+
+@media (max-width: 389px) {
+  .compact-hide {
+    display: none;
+  }
+
+  .compact-stack {
+    grid-template-columns: 1fr;
+  }
+}

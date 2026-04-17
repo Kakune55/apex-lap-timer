@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGPS } from '../hooks/useGPS';
+import { useViewportMetrics } from '../hooks/useViewportMetrics';
 import { Track, TrackPoint, Gate, Lap } from '../types';
 import { getDistance, formatTime, estimateGateCrossingTime, getTimeInterpolationRatio } from '../utils/geo';
 import { MapPin, StopCircle, Flag } from 'lucide-react';
@@ -12,6 +13,7 @@ interface Props {
 
 export function RecordTrack({ onSave, onCancel }: Props) {
     const { data: gps, error: gpsError, requestingPermission, requestPermission, retryGPS } = useGPS();
+    const { mapOffsetY, isShort } = useViewportMetrics();
     const [step, setStep] = useState<'setup' | 'waiting_speed' | 'recording' | 'finished'>('setup');
     const [trackType, setTrackType] = useState<'circuit' | 'sprint'>('circuit');
     const [trackName, setTrackName] = useState('');
@@ -198,18 +200,18 @@ export function RecordTrack({ onSave, onCancel }: Props) {
         <div className="relative h-full flex flex-col bg-bg-color text-white overflow-hidden">
             {/* Map Background */}
             <div className="absolute inset-0 z-0">
-                <TrackMap currentPos={gps} recordedPoints={points} startGate={startGate} offsetY={150} />
+                <TrackMap currentPos={gps} recordedPoints={points} startGate={startGate} offsetY={mapOffsetY} />
                 <div className="absolute inset-0 bg-linear-to-t from-bg-color/60 via-transparent to-transparent z-10 pointer-events-none"></div>
             </div>
 
-            <div className="relative z-20 flex flex-col h-full px-6 pb-6 pt-0 max-w-md mx-auto w-full">
-                <div className="flex justify-between items-center mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
+            <div className="relative z-20 flex flex-col h-full pt-0">
+                <div className="app-shell flex justify-between items-center gap-3 mb-6 sm:mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
                     <h2 className="text-2xl font-bold apex-pill px-4 py-2">Record Track</h2>
                     <button onClick={onCancel} className="text-text-secondary hover:text-white font-medium apex-pill px-4 py-2">Cancel</button>
                 </div>
 
                 {step === 'setup' && (
-                    <div className="space-y-8 flex-1 flex flex-col justify-end pb-8">
+                    <div className="app-shell app-safe-bottom flex-1 flex flex-col justify-end gap-[clamp(1.25rem,3.5dvh,2rem)] pb-[clamp(1rem,4dvh,2rem)]">
                         <div>
                             <label className="block text-xs font-bold text-text-secondary mb-3 uppercase tracking-widest">Track Name</label>
                             <input
@@ -286,11 +288,11 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                 )}
 
                 {step === 'waiting_speed' && (
-                    <div className="flex-1 flex flex-col items-center justify-end pb-12 text-center">
+                    <div className="app-shell app-safe-bottom flex-1 flex flex-col items-center justify-end pb-[clamp(1.5rem,6dvh,3rem)] text-center">
                         <div className="w-24 h-24 rounded-full border-4 border-dashed border-text-secondary animate-[spin_3s_linear_infinite] mb-8 bg-black/10 backdrop-blur-sm"></div>
                         <h3 className="text-2xl font-bold mb-3 drop-shadow-lg">Drive to Set Start</h3>
                         <p className="text-text-secondary max-w-62.5 drop-shadow-md">Accelerate past 10km/h to automatically set the start line heading.</p>
-                        <div className="mt-8 text-5xl font-sans tabular-nums font-bold drop-shadow-xl bg-black/20 px-6 py-4 rounded-3xl backdrop-blur-md">
+                        <div className="mt-8 app-recording-number font-sans tabular-nums font-bold drop-shadow-xl bg-black/20 px-6 py-4 rounded-3xl backdrop-blur-md">
                             {displaySpeedKmh.toFixed(1)} <span className="text-lg text-text-secondary font-sans">km/h</span>
                         </div>
                         {!gps && (
@@ -306,13 +308,13 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                 )}
 
                 {step === 'recording' && (
-                    <div className="flex-1 flex flex-col justify-end pb-4 sm:pb-8">
-                        <div className="flex-1 flex flex-col items-center justify-center mt-10 sm:mt-20">
+                    <div className="app-shell app-safe-bottom flex-1 flex flex-col justify-end">
+                        <div className={`flex-1 flex flex-col items-center justify-center ${isShort ? 'mt-4' : 'mt-[clamp(1rem,6dvh,5rem)]'}`}>
                             <div className="bg-black/20 backdrop-blur-md px-6 sm:px-8 py-4 sm:py-6 rounded-3xl sm:rounded-4xl border border-white/10 flex flex-col items-center shadow-2xl">
                                 <div className="text-accent-red animate-pulse mb-2 sm:mb-4 flex items-center gap-2 font-bold tracking-widest uppercase text-xs sm:text-sm">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-accent-red"></div> Recording
                                 </div>
-                                <div className="text-5xl sm:text-6xl font-bold font-sans tabular-nums mb-1 sm:mb-2 tracking-tighter">
+                                <div className="app-recording-number font-bold font-sans tabular-nums mb-1 sm:mb-2 tracking-tighter">
                                     {formatTime(elapsedMs)}
                                 </div>
                                 <div className="text-2xl sm:text-3xl text-white font-sans tabular-nums font-bold tracking-tight mb-1">
@@ -337,4 +339,3 @@ export function RecordTrack({ onSave, onCancel }: Props) {
         </div>
     );
 }
-
