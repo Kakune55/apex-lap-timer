@@ -151,6 +151,7 @@
       "finished": "FINISHED",
       "racing": "RACING"
     },
+    "gpsPermissionHelp": "Some devices need an explicit Enable GPS tap before the location permission prompt will appear.",
     "speed": "Speed",
     "time": "Time",
     "best": "Best",

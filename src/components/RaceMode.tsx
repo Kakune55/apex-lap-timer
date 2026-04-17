@@ -26,7 +26,7 @@ interface Props {
 export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const MAX_SECTOR_SEGMENTS = 3;
     const MAX_SECTOR_GATES = MAX_SECTOR_SEGMENTS - 1;
-    const { data: gps } = useGPS();
+    const { data: gps, error: gpsError, requestingPermission, requestPermission, retryGPS, permissionState } = useGPS();
     const { mapOffsetY, isShort, isNarrow } = useViewportMetrics();
     const [raceState, setRaceState] = useState<'waiting' | 'racing' | 'finished'>('waiting');
     const [startTime, setStartTime] = useState(0);
@@ -532,6 +532,38 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
 
             {/* Main Dashboard */}
             <div className="relative z-20 app-shell app-safe-bottom flex-1 flex flex-col justify-end pb-3 sm:pb-6">
+                {!gps && (permissionState === 'prompt' || permissionState === 'denied' || permissionState === 'unknown' || gpsError) ? (
+                    <div className="mb-3 apex-panel rounded-2xl p-4 text-center">
+                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">
+                            {t('recordTrack.waitingGpsSignal')}
+                        </div>
+                        {gpsError ? (
+                            <p className="text-xs text-white/80 mb-3">
+                                {t(`gps.errors.${gpsError}`)}
+                            </p>
+                        ) : (
+                            <p className="text-xs text-white/80 mb-3">
+                                {t('raceMode.gpsPermissionHelp')}
+                            </p>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={requestPermission}
+                                disabled={requestingPermission}
+                                className="bg-accent-green text-black font-bold py-2 rounded-xl text-sm hover:brightness-110 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {requestingPermission ? t('recordTrack.requesting') : t('recordTrack.enableGps')}
+                            </button>
+                            <button
+                                onClick={retryGPS}
+                                className="bg-white/10 text-white font-bold py-2 rounded-xl text-sm hover:bg-white/20 transition-colors"
+                            >
+                                {t('recordTrack.retryGps')}
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
                 {/* Speed */}
                 <div className={`text-center ${isShort ? 'mb-1' : 'mb-2'}`}>
                     <div className="app-speed-number font-bold font-sans tabular-nums tracking-tighter drop-shadow-2xl">

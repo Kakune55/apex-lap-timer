@@ -29,6 +29,7 @@ const listeners = new Set<() => void>();
 const GPS_RATE_MIN = 0.2;
 const GPS_RATE_MAX = 2;
 const GPS_RATE_STORAGE_KEY = 'apex_gps_refresh_hz';
+type GPSPermissionState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported' | 'secureContextRequired';
 
 const clampGPSRate = (value: number) => Math.max(GPS_RATE_MIN, Math.min(GPS_RATE_MAX, value));
 
@@ -55,6 +56,8 @@ let lastRealGPSUpdateAt = 0;
 let realGPSWatchdogTimeout: number | null = null;
 let permissionRequestTimeout: number | null = null;
 let isPermissionRequestInFlight = false;
+let gpsPermissionState: GPSPermissionState = 'unknown';
+let permissionStatusHandle: PermissionStatus | null = null;
 const FIRST_FIX_WATCHDOG_MS = 12000;
 const PERMISSION_REQUEST_WATCHDOG_MS = 10000;
 
@@ -89,6 +92,50 @@ const getGeoErrorMessage = (err: GeolocationPositionError): GPSErrorKey => {
         return 'timeout';
     }
     return 'unknown';
+};
+
+const updatePermissionState = (next: GPSPermissionState) => {
+    if (gpsPermissionState === next) {
+        return;
+    }
+    gpsPermissionState = next;
+    notify();
+};
+
+const refreshGPSPermissionState = async () => {
+    if (!('geolocation' in navigator)) {
+        updatePermissionState('unsupported');
+        return 'unsupported';
+    }
+    if (!hasSecureLocationContext()) {
+        updatePermissionState('secureContextRequired');
+        return 'secureContextRequired';
+    }
+    if (!('permissions' in navigator) || typeof navigator.permissions.query !== 'function') {
+        updatePermissionState('unknown');
+        return 'unknown';
+    }
+
+    try {
+        const status = await navigator.permissions.query({ name: 'geolocation' });
+        if (permissionStatusHandle !== status) {
+            if (permissionStatusHandle) {
+                permissionStatusHandle.onchange = null;
+            }
+            permissionStatusHandle = status;
+            permissionStatusHandle.onchange = () => {
+                updatePermissionState(permissionStatusHandle?.state as GPSPermissionState ?? 'unknown');
+                if (permissionStatusHandle?.state === 'granted' && !isSimulating) {
+                    startRealGPS(true);
+                }
+            };
+        }
+        updatePermissionState(status.state as GPSPermissionState);
+        return status.state as GPSPermissionState;
+    } catch {
+        updatePermissionState('unknown');
+        return 'unknown';
+    }
 };
 
 const startSimulation = () => {
@@ -150,16 +197,21 @@ const stopRealGPS = () => {
     lastRealGPSUpdateAt = 0;
 };
 
-const startRealGPS = () => {
+const startRealGPS = (skipPermissionGate = false) => {
     if (isSimulating) return;
     if (!('geolocation' in navigator)) {
+        updatePermissionState('unsupported');
         globalError = 'unsupported';
         notify();
         return;
     }
     if (!hasSecureLocationContext()) {
+        updatePermissionState('secureContextRequired');
         globalError = 'secureContextRequired';
         notify();
+        return;
+    }
+    if (!skipPermissionGate && gpsPermissionState !== 'granted') {
         return;
     }
     if (watchId !== null) return;
@@ -190,11 +242,15 @@ const startRealGPS = () => {
                 timestamp: position.timestamp,
             };
             lastRealGPSUpdateAt = position.timestamp;
+            updatePermissionState('granted');
             globalError = null;
             notify();
         },
         (err) => {
             clearRealGPSWatchdog();
+            if (err.code === err.PERMISSION_DENIED) {
+                updatePermissionState('denied');
+            }
             globalError = getGeoErrorMessage(err);
             notify();
         },
@@ -208,11 +264,13 @@ const startRealGPS = () => {
 
 export const requestGPSPermission = () => {
     if (!('geolocation' in navigator)) {
+        updatePermissionState('unsupported');
         globalError = 'unsupported';
         notify();
         return;
     }
     if (!hasSecureLocationContext()) {
+        updatePermissionState('secureContextRequired');
         globalError = 'secureContextRequired';
         notify();
         return;
@@ -242,6 +300,7 @@ export const requestGPSPermission = () => {
         (position) => {
             isPermissionRequestInFlight = false;
             clearPermissionRequestWatchdog();
+            updatePermissionState('granted');
             globalData = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude,
@@ -258,6 +317,9 @@ export const requestGPSPermission = () => {
         (err) => {
             isPermissionRequestInFlight = false;
             clearPermissionRequestWatchdog();
+            if (err.code === err.PERMISSION_DENIED) {
+                updatePermissionState('denied');
+            }
             globalError = getGeoErrorMessage(err);
             notify();
         },
@@ -273,7 +335,12 @@ export const retryGPS = () => {
     isPermissionRequestInFlight = false;
     clearPermissionRequestWatchdog();
     stopRealGPS();
-    startRealGPS();
+    if (gpsPermissionState === 'granted') {
+        startRealGPS(true);
+    } else {
+        requestGPSPermission();
+        return;
+    }
     notify();
 };
 
@@ -328,6 +395,7 @@ export function useGPS() {
         simSpeed: simSpeedKmh,
         gpsRefreshRateHz,
         requestingPermission: isPermissionRequestInFlight,
+        permissionState: gpsPermissionState,
     });
 
     useEffect(() => {
@@ -339,16 +407,35 @@ export function useGPS() {
                 simSpeed: simSpeedKmh,
                 gpsRefreshRateHz,
                 requestingPermission: isPermissionRequestInFlight,
+                permissionState: gpsPermissionState,
             });
         };
         listeners.add(handleUpdate);
 
-        if (!isSimulating && watchId === null) {
-            startRealGPS();
-        }
+        void refreshGPSPermissionState().then((permissionState) => {
+            if (!isSimulating && watchId === null && permissionState === 'granted') {
+                startRealGPS(true);
+            }
+        });
+
+        const handleVisibilityOrFocus = () => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+            void refreshGPSPermissionState().then((permissionState) => {
+                if (!isSimulating && watchId === null && permissionState === 'granted') {
+                    startRealGPS(true);
+                }
+            });
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+        window.addEventListener('focus', handleVisibilityOrFocus);
 
         return () => {
             listeners.delete(handleUpdate);
+            document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+            window.removeEventListener('focus', handleVisibilityOrFocus);
         };
     }, []);
 
@@ -359,6 +446,7 @@ export function useGPS() {
         simSpeed: state.simSpeed,
         gpsRefreshRateHz: state.gpsRefreshRateHz,
         requestingPermission: state.requestingPermission,
+        permissionState: state.permissionState,
         requestPermission: requestGPSPermission,
         retryGPS,
         toggleSimulation,
@@ -366,4 +454,3 @@ export function useGPS() {
         setGPSRefreshRateHz,
     };
 }
-

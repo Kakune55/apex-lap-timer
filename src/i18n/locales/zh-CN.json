@@ -151,6 +151,7 @@
       "finished": "已完成",
       "racing": "计时中"
     },
+    "gpsPermissionHelp": "部分设备需要先点一次“启用 GPS”才会弹出定位权限。",
     "speed": "速度",
     "time": "时间",
     "best": "最佳",
