@@ -85,6 +85,8 @@ The app now uses classic login + session token auth:
 - Server returns a bearer token.
 - Frontend stores token locally and sends `Authorization: Bearer <token>` for `/api/*` requests.
 - Session validity is tracked in the `sessions` table.
+- Sessions support multiple devices per user.
+- Sessions use sliding expiration and are extended on authenticated requests.
 - Session user payload now includes `dashboardAccess` and `isAdmin`.
 
 No Basic Auth environment variables are required anymore.

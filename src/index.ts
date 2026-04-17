@@ -52,6 +52,7 @@ const SESSIONS_USER_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_sessions_user ON
 const SESSIONS_EXPIRES_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const SESSION_SLIDING_TTL_MS = SESSION_TTL_MS;
 const PBKDF2_DEFAULT_ITERATIONS = 100000;
 const PBKDF2_MAX_ITERATIONS = 100000;
 
@@ -306,7 +307,11 @@ app.use("/api/*", async (c, next) => {
     return unauthorized(c);
   }
 
-  await db.prepare("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?").bind(nowTs, tokenHash).run();
+  const refreshedExpiresAt = nowTs + SESSION_SLIDING_TTL_MS;
+  await db
+    .prepare("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE token_hash = ?")
+    .bind(nowTs, refreshedExpiresAt, tokenHash)
+    .run();
 
   c.set("authUser", sanitizeSessionUser(session));
   c.set("tokenHash", tokenHash);
@@ -365,12 +370,12 @@ app.post("/api/auth/login", async (c) => {
   }
 
   const nowTs = Date.now();
-  await db.prepare("DELETE FROM sessions WHERE user_id = ? OR expires_at <= ?").bind(user.user_id, nowTs).run();
+  await db.prepare("DELETE FROM sessions WHERE expires_at <= ?").bind(nowTs).run();
 
   const rawToken = randomToken(32);
   const tokenHash = await sha256Hex(rawToken);
   const sessionId = crypto.randomUUID();
-  const expiresAt = nowTs + SESSION_TTL_MS;
+  const expiresAt = nowTs + SESSION_SLIDING_TTL_MS;
 
   await db
     .prepare(
