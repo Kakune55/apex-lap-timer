@@ -15,6 +15,7 @@ import { ChevronLeft } from 'lucide-react';
 import { TrackMap } from './TrackMap';
 import { MapViewMode, getNextMapViewMode } from '../utils/map';
 import { MapModeToggle } from './MapModeToggle';
+import { useI18n } from '../i18n';
 
 interface Props {
     track: Track;
@@ -44,6 +45,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
     const [currentLapSectorDeltas, setCurrentLapSectorDeltas] = useState<Array<number | null>>([null, null, null]);
     const [displaySectorDeltas, setDisplaySectorDeltas] = useState<Array<number | null>>([null, null, null]);
     const [isSectorDisplayFrozen, setIsSectorDisplayFrozen] = useState(false);
+    const { t } = useI18n();
     const currentLapPointsRef = useRef<TrackPoint[]>([]);
     const lastSprintLapRef = useRef<Lap | null>(null);
     const projectedDistanceRef = useRef(0);
@@ -521,7 +523,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     <div className="min-w-0 text-center apex-pill px-4 sm:px-6 py-2">
                         <h2 className="truncate text-sm font-bold uppercase tracking-widest text-text-secondary">{track.name}</h2>
                         <div className="text-xs text-white mt-0.5 font-medium">
-                            {raceState === 'waiting' ? 'APPROACH START LINE' : raceState === 'finished' ? 'FINISHED' : 'RACING'}
+                            {raceState === 'waiting' ? t('raceMode.status.waiting') : raceState === 'finished' ? t('raceMode.status.finished') : t('raceMode.status.racing')}
                         </div>
                     </div>
                     <MapModeToggle mode={mapMode} onToggle={toggleMapMode} />
@@ -535,22 +537,22 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                     <div className="app-speed-number font-bold font-sans tabular-nums tracking-tighter drop-shadow-2xl">
                         {speedKmh}
                     </div>
-                    <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-text-secondary mt-0 drop-shadow-md">KM/H</div>
+                    <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-text-secondary mt-0 drop-shadow-md">{t('common.units.kmh')}</div>
                 </div>
 
                 {/* Time & Delta Grid */}
                 <div className={`grid grid-cols-2 gap-2 sm:gap-4 mb-2 sm:mb-3 ${isNarrow ? 'compact-stack' : ''}`}>
                     {/* Time */}
                     <div className="apex-panel rounded-2xl p-3 sm:p-5 relative overflow-hidden flex flex-col justify-center">
-                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Time</div>
+                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">{t('raceMode.time')}</div>
                         <div className="app-primary-number font-sans font-bold tabular-nums tracking-tighter">
                             {formatTime(currentLapTime)}
                         </div>
                         <div className="text-[13px] sm:text-[15px] text-text-secondary mt-0.5 sm:mt-1 font-sans font-semibold tabular-nums">
-                            Best: {formatTime(track.bestTime)}
+                            {t('raceMode.best')}: {formatTime(track.bestTime)}
                         </div>
                         <div className={`text-[12px] sm:text-[14px] mt-1 font-sans font-bold tabular-nums ${lastLapColorClass}`}>
-                            Last: {lastLap ? formatTime(lastLap.time) : '--:--.--'}
+                            {t('raceMode.last')}: {lastLap ? formatTime(lastLap.time) : '--:--.--'}
                         </div>
                     </div>
 
@@ -559,8 +561,8 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                         raceState === 'waiting' ? 'apex-panel-muted' :
                         isFaster ? 'bg-accent-green/20 border-accent-green/50' : 'bg-accent-red/20 border-accent-red/50'
                     }`}>
-                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">Delta</div>
-                        <div className="text-[9px] font-bold uppercase tracking-widest text-text-secondary mb-1">Live Sectors</div>
+                        <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-0.5 sm:mb-1">{t('raceMode.delta')}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-widest text-text-secondary mb-1">{t('raceMode.liveSectors')}</div>
                         <div className={`app-primary-number font-sans font-bold tabular-nums tracking-tighter ${
                             raceState === 'waiting' ? 'text-text-secondary' :
                             isFaster ? 'text-accent-green' : 'text-accent-red'
@@ -594,7 +596,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                 {track.type === 'circuit' && lapHistory.length > 0 && (
                     <div className="apex-panel-muted rounded-2xl p-2 sm:p-3">
                         <div className="flex justify-between items-center mb-1.5">
-                            <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary">Previous Laps</div>
+                            <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('raceMode.previousLaps')}</div>
                             <label className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-text-secondary cursor-pointer hover:text-white transition-colors">
                                 <input
                                     type="checkbox"
@@ -605,7 +607,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                     }}
                                     className="accent-accent-green w-3 h-3 rounded"
                                 />
-                                Auto-Update
+                                {t('raceMode.autoUpdate')}
                             </label>
                         </div>
                         <div className="space-y-1">
@@ -616,7 +618,7 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                                 return (
                                     <div key={lap.id} className="text-xs sm:text-sm font-sans tabular-nums bg-white/5 p-1.5 sm:p-2 rounded-xl">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-text-secondary font-medium text-[10px] sm:text-xs">Lap {lapHistory.length - i}</span>
+                                            <span className="text-text-secondary font-medium text-[10px] sm:text-xs">{t('raceMode.lap', { index: lapHistory.length - i })}</span>
                                             <div className="flex items-center gap-2 sm:gap-3">
                                                 <span className={`font-bold ${isLapFaster ? 'text-accent-green' : 'text-accent-red'}`}>
                                                     {formatDelta(lapDelta)}
@@ -655,20 +657,20 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
             {showSprintModal && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
                     <div className="apex-panel p-6 sm:p-8 rounded-3xl max-w-md w-full max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto text-center">
-                        <h3 className="text-2xl font-bold mb-2">Sprint Finished!</h3>
+                        <h3 className="text-2xl font-bold mb-2">{t('raceMode.sprintFinished')}</h3>
                         <div className="app-recording-number font-sans font-bold mb-3 text-accent-green tabular-nums">
                             {formatTime(sprintTime)}
                         </div>
 
                         <div className={`grid grid-cols-2 gap-2 mb-4 ${isNarrow ? 'compact-stack' : ''}`}>
                             <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-left">
-                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Delta</div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">{t('raceMode.delta')}</div>
                                 <div className={`text-lg font-sans font-bold tabular-nums ${sprintDelta <= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                     {formatDelta(sprintDelta)}
                                 </div>
                             </div>
                             <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-left">
-                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">Reference</div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-1">{t('raceMode.reference')}</div>
                                 <div className="text-lg font-sans font-bold tabular-nums text-white/90">
                                     {formatTime(track.bestTime)}
                                 </div>
@@ -676,14 +678,14 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                         </div>
 
                         <div className="rounded-2xl bg-white/5 border border-white/10 p-3 mb-6 text-left">
-                            <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-2">Sectors</div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary mb-2">{t('raceMode.sectors')}</div>
                             <div className="space-y-1.5">
                                 {sprintSectorSplits.map((split, idx) => {
                                     const sectorDelta = sprintSectorDeltas[idx] || 0;
                                     const deltaClass = sectorDelta < 0 ? 'text-accent-green' : sectorDelta > 0 ? 'text-accent-yellow' : 'text-text-secondary';
                                     return (
                                         <div key={`sprint-sector-${idx}`} className="grid grid-cols-[44px_1fr_auto] items-center gap-2 text-xs tabular-nums">
-                                            <span className="text-text-secondary font-bold">S{idx + 1}</span>
+                                            <span className="text-text-secondary font-bold">{t('track.sectorShort', { index: idx + 1 })}</span>
                                             <span className="text-white/90 font-semibold">{formatTime(split)}</span>
                                             <span className={`font-bold ${deltaClass}`}>{shortDelta(sectorDelta)}</span>
                                         </div>
@@ -695,36 +697,36 @@ export function RaceMode({ track, onBack, onUpdateTrack }: Props) {
                         {sprintIsNewBest ? (
                             <>
                                 <div className="text-accent-green font-bold mb-6 uppercase tracking-widest text-sm">
-                                    New Personal Best!
+                                    {t('raceMode.newPersonalBest')}
                                 </div>
                                 <p className="text-text-secondary mb-6 text-sm">
-                                    Would you like to update the reference track with this new record?
+                                    {t('raceMode.updateReferencePrompt')}
                                 </p>
                                 <div className="flex gap-4">
                                     <button
                                         onClick={() => saveSprintResult(true)}
                                         className="flex-1 apex-btn-primary py-3"
                                     >
-                                        Update
+                                        {t('common.buttons.update')}
                                     </button>
                                     <button
                                         onClick={() => saveSprintResult(false)}
                                         className="flex-1 bg-white/10 text-white font-bold py-3 rounded-xl hover:bg-white/20 transition-colors"
                                     >
-                                        Skip
+                                        {t('common.buttons.skip')}
                                     </button>
                                 </div>
                             </>
                         ) : (
                             <>
                                 <div className="text-text-secondary font-bold mb-6 uppercase tracking-widest text-sm">
-                                    Slower than Best ({formatTime(track.bestTime)})
+                                    {t('raceMode.slowerThanBest', { time: formatTime(track.bestTime) })}
                                 </div>
                                 <button
                                     onClick={() => saveSprintResult(false)}
                                     className="w-full apex-btn-primary py-3"
                                 >
-                                    Continue
+                                    {t('common.buttons.continue')}
                                 </button>
                             </>
                         )}

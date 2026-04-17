@@ -13,6 +13,7 @@ import {
     Brush
 } from 'recharts';
 import { Activity, Zap, Maximize2 } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 interface Props {
     lap: Lap;
@@ -20,6 +21,7 @@ interface Props {
 
 export function LapAnalysisCharts({ lap }: Props) {
     const [isCompact, setIsCompact] = useState(false);
+    const { t } = useI18n();
 
     useEffect(() => {
         const updateCompact = () => {
@@ -135,7 +137,7 @@ export function LapAnalysisCharts({ lap }: Props) {
         <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
                 <div className="text-[10px] font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
-                    <Maximize2 size={12} /> Use slider below to zoom
+                    <Maximize2 size={12} /> {t('charts.zoomHint')}
                 </div>
             </div>
 
@@ -143,7 +145,7 @@ export function LapAnalysisCharts({ lap }: Props) {
             <div className="apex-panel p-3 sm:p-4 rounded-3xl">
                 <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-4">
                     <Activity size={14} className="text-accent-green" />
-                    Speed (km/h)
+                    {t('charts.speedWithUnit')}
                 </div>
                 <div className="app-chart-sm">
                     <ResponsiveContainer width="100%" height="100%">
@@ -173,7 +175,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                                 contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '12px', fontSize: '10px' }}
                                 labelStyle={{ color: 'var(--text-secondary)' }}
                                 itemStyle={{ color: 'var(--accent-green)' }}
-                                formatter={(val) => [`${val} km/h`, 'Speed']}
+                                formatter={(val) => [`${val} ${t('common.units.kmh')}`, t('charts.speed')]}
                                 labelFormatter={(val) => `${val}m`}
                             />
                             <Area 
@@ -203,7 +205,7 @@ export function LapAnalysisCharts({ lap }: Props) {
             <div className="apex-panel p-3 sm:p-4 rounded-3xl">
                 <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-4">
                     <Zap size={14} className="text-accent-red" />
-                    G-Force Analysis
+                    {t('charts.gForce')}
                 </div>
                 <div className="app-chart-lg">
                     <ResponsiveContainer width="100%" height="100%">
@@ -246,7 +248,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                             <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" />
                             
                             <Area 
-                                name="Total G"
+                                name={t('charts.totalG')}
                                 type="monotone" 
                                 dataKey="totalG" 
                                 stroke="var(--accent-yellow)" 
@@ -257,7 +259,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                                 isAnimationActive={false}
                             />
                             <Area 
-                                name="Long G"
+                                name={t('charts.longG')}
                                 type="monotone" 
                                 dataKey="longG" 
                                 stroke="var(--accent-red)" 
@@ -267,7 +269,7 @@ export function LapAnalysisCharts({ lap }: Props) {
                                 isAnimationActive={false}
                             />
                             <Area 
-                                name="Lat G"
+                                name={t('charts.latG')}
                                 type="monotone" 
                                 dataKey="latG" 
                                 stroke="var(--accent-blue)" 
@@ -281,9 +283,9 @@ export function LapAnalysisCharts({ lap }: Props) {
                 </div>
                 <div className="mt-2 flex justify-between text-[8px] font-bold uppercase tracking-tighter text-text-secondary px-2">
                     <div className="flex gap-4">
-                        <span className="text-accent-red">Red: Long G</span>
-                        <span className="text-accent-blue">Blue: Lat G</span>
-                        <span className="text-accent-yellow">Yellow: Total G</span>
+                        <span className="text-accent-red">{t('charts.legendLong')}</span>
+                        <span className="text-accent-blue">{t('charts.legendLat')}</span>
+                        <span className="text-accent-yellow">{t('charts.legendTotal')}</span>
                     </div>
                 </div>
             </div>

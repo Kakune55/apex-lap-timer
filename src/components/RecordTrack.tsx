@@ -5,6 +5,7 @@ import { Track, TrackPoint, Gate, Lap } from '../types';
 import { getDistance, formatTime, estimateGateCrossingTime, getTimeInterpolationRatio } from '../utils/geo';
 import { MapPin, StopCircle, Flag } from 'lucide-react';
 import { TrackMap } from './TrackMap';
+import { useI18n } from '../i18n';
 
 interface Props {
     onSave: (track: Track) => void;
@@ -14,6 +15,7 @@ interface Props {
 export function RecordTrack({ onSave, onCancel }: Props) {
     const { data: gps, error: gpsError, requestingPermission, requestPermission, retryGPS } = useGPS();
     const { mapOffsetY, isShort } = useViewportMetrics();
+    const { t } = useI18n();
     const [step, setStep] = useState<'setup' | 'waiting_speed' | 'recording' | 'finished'>('setup');
     const [trackType, setTrackType] = useState<'circuit' | 'sprint'>('circuit');
     const [trackName, setTrackName] = useState('');
@@ -206,39 +208,39 @@ export function RecordTrack({ onSave, onCancel }: Props) {
 
             <div className="relative z-20 flex flex-col h-full pt-0">
                 <div className="app-shell flex justify-between items-center gap-3 mb-6 sm:mb-8 pt-[calc(var(--safe-top)+0.5rem)]">
-                    <h2 className="text-2xl font-bold apex-pill px-4 py-2">Record Track</h2>
-                    <button onClick={onCancel} className="text-text-secondary hover:text-white font-medium apex-pill px-4 py-2">Cancel</button>
+                    <h2 className="text-2xl font-bold apex-pill px-4 py-2">{t('recordTrack.title')}</h2>
+                    <button onClick={onCancel} className="text-text-secondary hover:text-white font-medium apex-pill px-4 py-2">{t('common.buttons.cancel')}</button>
                 </div>
 
                 {step === 'setup' && (
                     <div className="app-shell app-safe-bottom flex-1 flex flex-col justify-end gap-[clamp(1.25rem,3.5dvh,2rem)] pb-[clamp(1rem,4dvh,2rem)]">
                         <div>
-                            <label className="block text-xs font-bold text-text-secondary mb-3 uppercase tracking-widest">Track Name</label>
+                            <label className="block text-xs font-bold text-text-secondary mb-3 uppercase tracking-widest">{t('recordTrack.trackName')}</label>
                             <input
                                 type="text"
                                 value={trackName}
                                 onChange={e => setTrackName(e.target.value)}
-                                placeholder="e.g. Nurburgring Nordschleife"
+                                placeholder={t('recordTrack.trackNamePlaceholder')}
                                 className="w-full apex-panel-muted px-5 py-4 text-white focus:outline-none focus:border-white/20 text-lg transition-colors"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-text-secondary mb-3 uppercase tracking-widest">Track Type</label>
+                            <label className="block text-xs font-bold text-text-secondary mb-3 uppercase tracking-widest">{t('recordTrack.trackType')}</label>
                             <div className="grid grid-cols-2 gap-4">
                                 <button
                                     onClick={() => setTrackType('circuit')}
                                     className={`p-5 rounded-2xl border text-center transition-all backdrop-blur-md ${trackType === 'circuit' ? 'bg-accent-green text-black border-accent-green shadow-lg scale-[1.02]' : 'apex-panel-muted text-text-secondary hover:border-white/20'}`}
                                 >
-                                    <div className="font-bold mb-1 text-lg">Circuit</div>
-                                    <div className="text-xs opacity-70">Loop track</div>
+                                    <div className="font-bold mb-1 text-lg">{t('track.types.circuit')}</div>
+                                    <div className="text-xs opacity-70">{t('track.typeDescriptions.circuit')}</div>
                                 </button>
                                 <button
                                     onClick={() => setTrackType('sprint')}
                                     className={`p-5 rounded-2xl border text-center transition-all backdrop-blur-md ${trackType === 'sprint' ? 'bg-accent-green text-black border-accent-green shadow-lg scale-[1.02]' : 'apex-panel-muted text-text-secondary hover:border-white/20'}`}
                                 >
-                                    <div className="font-bold mb-1 text-lg">Sprint</div>
-                                    <div className="text-xs opacity-70">Point to point</div>
+                                    <div className="font-bold mb-1 text-lg">{t('track.types.sprint')}</div>
+                                    <div className="text-xs opacity-70">{t('track.typeDescriptions.sprint')}</div>
                                 </button>
                             </div>
                         </div>
@@ -249,16 +251,16 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                 disabled={!trackName || !gps}
                                 className="w-full apex-btn-primary py-5 disabled:opacity-50 flex justify-center items-center gap-2 text-lg shadow-xl"
                             >
-                                <MapPin size={22} /> Set Start Gate
+                                <MapPin size={22} /> {t('recordTrack.setStartGate')}
                             </button>
                             {!gps && (
                                 <div className="mt-4 space-y-3">
                                     <p className="text-center text-sm text-accent-red font-medium bg-black/50 py-2 rounded-full backdrop-blur-md">
-                                        Waiting for GPS signal...
+                                        {t('recordTrack.waitingGpsSignal')}
                                     </p>
                                     {gpsError ? (
                                         <p className="text-xs text-center text-white/80 bg-black/40 px-3 py-2 rounded-xl">
-                                            {gpsError}
+                                            {t(`gps.errors.${gpsError}`)}
                                         </p>
                                     ) : null}
                                     <div className="grid grid-cols-2 gap-2">
@@ -267,18 +269,18 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                             disabled={requestingPermission}
                                             className="bg-accent-green text-black font-bold py-2 rounded-xl text-sm hover:brightness-110 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                         >
-                                            {requestingPermission ? 'Requesting...' : 'Enable GPS'}
+                                            {requestingPermission ? t('recordTrack.requesting') : t('recordTrack.enableGps')}
                                         </button>
                                         <button
                                             onClick={retryGPS}
                                             className="bg-white/10 text-white font-bold py-2 rounded-xl text-sm hover:bg-white/20 transition-colors"
                                         >
-                                            Retry GPS
+                                            {t('recordTrack.retryGps')}
                                         </button>
                                     </div>
                                     {requestingPermission ? (
                                         <p className="text-xs text-center text-white/70">
-                                            Waiting for Android permission dialog...
+                                            {t('recordTrack.waitingAndroidPermission')}
                                         </p>
                                     ) : null}
                                 </div>
@@ -290,10 +292,10 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                 {step === 'waiting_speed' && (
                     <div className="app-shell app-safe-bottom flex-1 flex flex-col items-center justify-end pb-[clamp(1.5rem,6dvh,3rem)] text-center">
                         <div className="w-24 h-24 rounded-full border-4 border-dashed border-text-secondary animate-[spin_3s_linear_infinite] mb-8 bg-black/10 backdrop-blur-sm"></div>
-                        <h3 className="text-2xl font-bold mb-3 drop-shadow-lg">Drive to Set Start</h3>
-                        <p className="text-text-secondary max-w-62.5 drop-shadow-md">Accelerate past 10km/h to automatically set the start line heading.</p>
+                        <h3 className="text-2xl font-bold mb-3 drop-shadow-lg">{t('recordTrack.waitingSpeedTitle')}</h3>
+                        <p className="text-text-secondary max-w-62.5 drop-shadow-md">{t('recordTrack.waitingSpeedDescription')}</p>
                         <div className="mt-8 app-recording-number font-sans tabular-nums font-bold drop-shadow-xl bg-black/20 px-6 py-4 rounded-3xl backdrop-blur-md">
-                            {displaySpeedKmh.toFixed(1)} <span className="text-lg text-text-secondary font-sans">km/h</span>
+                            {displaySpeedKmh.toFixed(1)} <span className="text-lg text-text-secondary font-sans">{t('common.units.kmh')}</span>
                         </div>
                         {!gps && (
                             <button
@@ -301,7 +303,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                                 disabled={requestingPermission}
                                 className="mt-4 bg-accent-green text-black font-bold py-2.5 px-4 rounded-xl text-sm hover:brightness-110 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                {requestingPermission ? 'Requesting Permission...' : 'Enable GPS Permission'}
+                                {requestingPermission ? t('recordTrack.requestingPermission') : t('recordTrack.enableGpsPermission')}
                             </button>
                         )}
                     </div>
@@ -312,16 +314,16 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                         <div className={`flex-1 flex flex-col items-center justify-center ${isShort ? 'mt-4' : 'mt-[clamp(1rem,6dvh,5rem)]'}`}>
                             <div className="bg-black/20 backdrop-blur-md px-6 sm:px-8 py-4 sm:py-6 rounded-3xl sm:rounded-4xl border border-white/10 flex flex-col items-center shadow-2xl">
                                 <div className="text-accent-red animate-pulse mb-2 sm:mb-4 flex items-center gap-2 font-bold tracking-widest uppercase text-xs sm:text-sm">
-                                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-accent-red"></div> Recording
+                                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-accent-red"></div> {t('recordTrack.recording')}
                                 </div>
                                 <div className="app-recording-number font-bold font-sans tabular-nums mb-1 sm:mb-2 tracking-tighter">
                                     {formatTime(elapsedMs)}
                                 </div>
                                 <div className="text-2xl sm:text-3xl text-white font-sans tabular-nums font-bold tracking-tight mb-1">
-                                    {displaySpeedKmh.toFixed(1)} <span className="text-base sm:text-lg text-text-secondary font-medium">km/h</span>
+                                    {displaySpeedKmh.toFixed(1)} <span className="text-base sm:text-lg text-text-secondary font-medium">{t('common.units.kmh')}</span>
                                 </div>
                                 <div className="text-base sm:text-lg text-text-secondary font-sans tabular-nums font-medium">
-                                    {(totalDistance / 1000).toFixed(2)} km
+                                    {(totalDistance / 1000).toFixed(2)} {t('common.units.km')}
                                 </div>
                             </div>
                         </div>
@@ -331,7 +333,7 @@ export function RecordTrack({ onSave, onCancel }: Props) {
                             className="w-full apex-btn-primary py-4 sm:py-5 rounded-2xl flex justify-center items-center gap-2 text-base sm:text-lg shadow-xl mt-4 sm:mt-8"
                         >
                             {trackType === 'circuit' ? <StopCircle size={20} /> : <Flag size={20} />}
-                            {trackType === 'circuit' ? 'Stop & Save Lap' : 'Set Finish Line'}
+                            {trackType === 'circuit' ? t('recordTrack.stopAndSaveLap') : t('recordTrack.setFinishLine')}
                         </button>
                     </div>
                 )}

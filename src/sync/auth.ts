@@ -5,6 +5,18 @@ export type SessionUser = {
   displayName: string | null;
 };
 
+export type AuthErrorCode = "invalid_credentials" | "login_failed";
+
+export class AuthError extends Error {
+  code: AuthErrorCode;
+
+  constructor(code: AuthErrorCode, message?: string) {
+    super(message ?? code);
+    this.name = "AuthError";
+    this.code = code;
+  }
+}
+
 export async function login(username: string, password: string): Promise<SessionUser> {
   const response = await fetch("/api/auth/login", {
     method: "POST",
@@ -15,7 +27,10 @@ export async function login(username: string, password: string): Promise<Session
   });
 
   if (!response.ok) {
-    throw new Error(response.status === 401 ? "invalid credentials" : `login failed: ${response.status}`);
+    throw new AuthError(
+      response.status === 401 ? "invalid_credentials" : "login_failed",
+      `login failed: ${response.status}`,
+    );
   }
 
   const payload = (await response.json()) as {

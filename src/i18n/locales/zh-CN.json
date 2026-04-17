@@ -1,0 +1,200 @@
+{
+  "common": {
+    "buttons": {
+      "cancel": "取消",
+      "delete": "删除",
+      "continue": "继续",
+      "update": "更新",
+      "skip": "跳过",
+      "logout": "退出登录",
+      "retry": "重试",
+      "more": "更多"
+    },
+    "units": {
+      "km": "km",
+      "kmh": "km/h",
+      "hz": "Hz"
+    },
+    "languageNames": {
+      "en": "English",
+      "zh-CN": "简体中文"
+    }
+  },
+  "track": {
+    "types": {
+      "circuit": "环形赛道",
+      "sprint": "冲刺赛道"
+    },
+    "typeDescriptions": {
+      "circuit": "闭环路线",
+      "sprint": "点到点路线"
+    },
+    "sector": "分段 {{index}}",
+    "sectorShort": "S{{index}}"
+  },
+  "devTools": {
+    "title": "开发工具",
+    "enableSimulator": "启用模拟器",
+    "disableSimulator": "关闭模拟器",
+    "simSpeed": "模拟速度"
+  },
+  "app": {
+    "auth": {
+      "checkingSession": "正在检查登录状态...",
+      "signIn": "登录",
+      "signingIn": "正在登录...",
+      "title": "登录",
+      "subtitle": "使用已配置的账号访问云同步功能。",
+      "username": "用户名",
+      "password": "密码",
+      "missingCredentials": "请输入用户名和密码",
+      "errors": {
+        "invalidCredentials": "用户名或密码错误",
+        "loginFailed": "登录失败",
+        "restoreSessionFailed": "恢复登录状态失败"
+      }
+    },
+    "sync": {
+      "states": {
+        "syncing": "正在同步到云端",
+        "offline": "当前处于离线模式",
+        "error": "同步已暂停，已排队重试",
+        "idle": "云端已是最新"
+      },
+      "queued": "队列中 {{count}} 项",
+      "relative": {
+        "never": "从未",
+        "justNow": "刚刚",
+        "minutesAgo": "{{count}} 分钟前",
+        "hoursAgo": "{{count}} 小时前",
+        "daysAgo": "{{count}} 天前"
+      }
+    },
+    "settings": {
+      "title": "设置",
+      "signedIn": "已登录",
+      "locationRefreshRate": "定位刷新频率",
+      "locationRefreshRateSupported": "会立即生效，但真实 GPS 频率仍可能受设备或浏览器限制（通常约 1Hz）。",
+      "locationRefreshRateUnsupported": "当前设备或浏览器不支持。",
+      "language": "语言",
+      "languageHelp": "对整个应用生效，并保存在当前设备上。",
+      "debugTools": "调试工具",
+      "debugToolsDescription": "显示模拟器和诊断面板",
+      "toggleDebugTools": "切换调试工具",
+      "keepScreenAwake": "保持屏幕常亮",
+      "keepScreenAwakeDescription": "应用打开时阻止屏幕休眠",
+      "toggleKeepScreenAwake": "切换保持屏幕常亮",
+      "wakeLock": {
+        "active": "已启用：当前会阻止屏幕休眠。",
+        "enabling": "正在启用常亮锁定... 在 Android 上请保持当前标签页处于前台。",
+        "off": "已关闭：屏幕可正常休眠。",
+        "unsupported": "当前浏览器或设备不支持保持屏幕常亮。",
+        "failed": "无法保持屏幕常亮，请检查省电模式和浏览器权限。"
+      }
+    },
+    "deleteTrack": {
+      "title": "确认删除",
+      "description": "该赛道及其圈速历史将被移除。"
+    }
+  },
+  "trackList": {
+    "title": "已保存赛道",
+    "settings": "设置",
+    "newTrack": "新建赛道",
+    "createNewTrack": "创建新赛道",
+    "emptyTitle": "还没有记录赛道",
+    "emptyDescription": "先录制一条环形或冲刺赛道，再开始计时。",
+    "viewDetails": "查看详情"
+  },
+  "recordTrack": {
+    "title": "录制赛道",
+    "trackName": "赛道名称",
+    "trackNamePlaceholder": "例如：纽博格林北环",
+    "trackType": "赛道类型",
+    "setStartGate": "设置起点线",
+    "waitingGpsSignal": "正在等待 GPS 信号...",
+    "enableGps": "启用 GPS",
+    "retryGps": "重试 GPS",
+    "waitingAndroidPermission": "正在等待 Android 权限弹窗...",
+    "requesting": "请求中...",
+    "waitingSpeedTitle": "开始行驶以设置起点",
+    "waitingSpeedDescription": "加速超过 10km/h 后，会自动确定起点线朝向。",
+    "requestingPermission": "正在请求权限...",
+    "enableGpsPermission": "启用 GPS 权限",
+    "recording": "录制中",
+    "stopAndSaveLap": "停止并保存单圈",
+    "setFinishLine": "设置终点线"
+  },
+  "trackDetails": {
+    "analyzingLap": "正在分析单圈：{{time}}",
+    "mode": "模式：{{mode}}",
+    "bestLap": "最快单圈",
+    "distance": "距离",
+    "lapHistory": "单圈历史",
+    "resetView": "重置视图",
+    "noDetailedHistory": "暂无详细历史数据。录制新单圈后可查看分析。",
+    "record": "纪录",
+    "deleteThisLap": "删除该单圈",
+    "trackInfo": "赛道信息",
+    "type": "类型",
+    "totalLaps": "总圈数",
+    "sectors": "分段",
+    "addSector": "添加分段",
+    "maxSegments": "最多 3 段",
+    "noSectors": "尚未定义分段",
+    "deleteLapTitle": "删除单圈记录",
+    "deleteLapDescription": "该单圈将从历史中永久删除。"
+  },
+  "raceMode": {
+    "status": {
+      "waiting": "靠近起点线",
+      "finished": "已完成",
+      "racing": "计时中"
+    },
+    "speed": "速度",
+    "time": "时间",
+    "best": "最佳",
+    "last": "上一圈",
+    "delta": "差值",
+    "liveSectors": "实时分段",
+    "previousLaps": "最近单圈",
+    "autoUpdate": "自动更新",
+    "lap": "第 {{index}} 圈",
+    "sprintFinished": "冲刺完成！",
+    "reference": "参考成绩",
+    "sectors": "分段",
+    "newPersonalBest": "新的个人最佳！",
+    "updateReferencePrompt": "是否用这次新纪录更新参考赛道？",
+    "slowerThanBest": "慢于最佳成绩（{{time}}）"
+  },
+  "charts": {
+    "zoomHint": "使用下方滑块缩放",
+    "speed": "速度",
+    "speedWithUnit": "速度（km/h）",
+    "gForce": "G 值分析",
+    "totalG": "总 G",
+    "longG": "纵向 G",
+    "latG": "横向 G",
+    "legendLong": "红色：纵向 G",
+    "legendLat": "蓝色：横向 G",
+    "legendTotal": "黄色：总 G"
+  },
+  "mapMode": {
+    "dt-absolute": "DT 基准",
+    "dt-trend": "DT 变化",
+    "speed-heatmap": "速度热力图"
+  },
+  "gps": {
+    "errors": {
+      "unsupported": "当前浏览器不支持地理定位",
+      "secureContextRequired": "Safari 在移动设备上需要 HTTPS 才能使用 GPS，请通过 https:// 或 localhost 打开应用。",
+      "permissionDenied": "定位权限被拒绝。Safari 可前往 设置 > Safari > 定位 中允许后重新加载。",
+      "positionUnavailable": "当前无法获取 GPS 位置。请移动到开阔区域并确认系统定位服务已开启。",
+      "timeout": "GPS 超时，请保持页面处于前台后点击重试。",
+      "requestSlow": "GPS 请求耗时过长，请保持应用在前台并点击重试 GPS。",
+      "permissionDialogPending": "正在等待 Android 权限弹窗...",
+      "permissionPromptNoResponse": "定位权限弹窗没有响应，请检查浏览器站点权限和系统定位设置后重试。",
+      "unknown": "获取 GPS 位置失败。"
+    }
+  }
+}

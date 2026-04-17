@@ -1,0 +1,200 @@
+{
+  "common": {
+    "buttons": {
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "continue": "Continue",
+      "update": "Update",
+      "skip": "Skip",
+      "logout": "Logout",
+      "retry": "Retry",
+      "more": "More"
+    },
+    "units": {
+      "km": "km",
+      "kmh": "km/h",
+      "hz": "Hz"
+    },
+    "languageNames": {
+      "en": "English",
+      "zh-CN": "简体中文"
+    }
+  },
+  "track": {
+    "types": {
+      "circuit": "Circuit",
+      "sprint": "Sprint"
+    },
+    "typeDescriptions": {
+      "circuit": "Loop track",
+      "sprint": "Point to point"
+    },
+    "sector": "Sector {{index}}",
+    "sectorShort": "S{{index}}"
+  },
+  "devTools": {
+    "title": "Dev Tools",
+    "enableSimulator": "Enable Simulator",
+    "disableSimulator": "Disable Simulator",
+    "simSpeed": "Sim Speed"
+  },
+  "app": {
+    "auth": {
+      "checkingSession": "Checking session...",
+      "signIn": "Sign In",
+      "signingIn": "Signing in...",
+      "title": "Sign In",
+      "subtitle": "Use your configured account to access cloud sync.",
+      "username": "Username",
+      "password": "Password",
+      "missingCredentials": "Please enter username and password",
+      "errors": {
+        "invalidCredentials": "Invalid credentials",
+        "loginFailed": "Login failed",
+        "restoreSessionFailed": "Failed to restore auth session"
+      }
+    },
+    "sync": {
+      "states": {
+        "syncing": "Syncing to cloud",
+        "offline": "Offline mode active",
+        "error": "Sync paused, retry queued",
+        "idle": "Cloud up to date"
+      },
+      "queued": "{{count}} queued",
+      "relative": {
+        "never": "never",
+        "justNow": "just now",
+        "minutesAgo": "{{count}}m ago",
+        "hoursAgo": "{{count}}h ago",
+        "daysAgo": "{{count}}d ago"
+      }
+    },
+    "settings": {
+      "title": "Settings",
+      "signedIn": "Signed in",
+      "locationRefreshRate": "Location Refresh Rate",
+      "locationRefreshRateSupported": "Applied immediately. Real GPS rate may still be capped by device/browser (often around 1Hz).",
+      "locationRefreshRateUnsupported": "Not supported on this device/browser.",
+      "language": "Language",
+      "languageHelp": "Used across the whole app and saved on this device.",
+      "debugTools": "Debug Tools",
+      "debugToolsDescription": "Show simulator and diagnostics panel",
+      "toggleDebugTools": "Toggle debug tools",
+      "keepScreenAwake": "Keep Screen Awake",
+      "keepScreenAwakeDescription": "Prevent display sleep while app is open",
+      "toggleKeepScreenAwake": "Toggle keep screen awake",
+      "wakeLock": {
+        "active": "Active: display sleep is currently blocked.",
+        "enabling": "Enabling wake lock... keep this tab in foreground on Android.",
+        "off": "Off: screen can sleep normally.",
+        "unsupported": "Keep screen awake is not supported on this browser/device.",
+        "failed": "Unable to keep screen awake. Check battery saver and browser permissions."
+      }
+    },
+    "deleteTrack": {
+      "title": "Confirm Delete",
+      "description": "This track and its lap history will be removed."
+    }
+  },
+  "trackList": {
+    "title": "Saved Tracks",
+    "settings": "Settings",
+    "newTrack": "New Track",
+    "createNewTrack": "Create new track",
+    "emptyTitle": "No tracks recorded",
+    "emptyDescription": "Record a circuit or sprint track to start racing.",
+    "viewDetails": "View Details"
+  },
+  "recordTrack": {
+    "title": "Record Track",
+    "trackName": "Track Name",
+    "trackNamePlaceholder": "e.g. Nurburgring Nordschleife",
+    "trackType": "Track Type",
+    "setStartGate": "Set Start Gate",
+    "waitingGpsSignal": "Waiting for GPS signal...",
+    "enableGps": "Enable GPS",
+    "retryGps": "Retry GPS",
+    "waitingAndroidPermission": "Waiting for Android permission dialog...",
+    "requesting": "Requesting...",
+    "waitingSpeedTitle": "Drive to Set Start",
+    "waitingSpeedDescription": "Accelerate past 10km/h to automatically set the start line heading.",
+    "requestingPermission": "Requesting Permission...",
+    "enableGpsPermission": "Enable GPS Permission",
+    "recording": "Recording",
+    "stopAndSaveLap": "Stop & Save Lap",
+    "setFinishLine": "Set Finish Line"
+  },
+  "trackDetails": {
+    "analyzingLap": "Analyzing Lap: {{time}}",
+    "mode": "Mode: {{mode}}",
+    "bestLap": "Best Lap",
+    "distance": "Distance",
+    "lapHistory": "Lap History",
+    "resetView": "Reset View",
+    "noDetailedHistory": "No detailed history available. Record new laps to see analysis.",
+    "record": "Record",
+    "deleteThisLap": "Delete this lap",
+    "trackInfo": "Track Info",
+    "type": "Type",
+    "totalLaps": "Total Laps",
+    "sectors": "Sectors",
+    "addSector": "Add Sector",
+    "maxSegments": "Max 3 Segments",
+    "noSectors": "No sectors defined",
+    "deleteLapTitle": "Delete Lap Record",
+    "deleteLapDescription": "This lap will be removed permanently from history."
+  },
+  "raceMode": {
+    "status": {
+      "waiting": "APPROACH START LINE",
+      "finished": "FINISHED",
+      "racing": "RACING"
+    },
+    "speed": "Speed",
+    "time": "Time",
+    "best": "Best",
+    "last": "Last",
+    "delta": "Delta",
+    "liveSectors": "Live Sectors",
+    "previousLaps": "Previous Laps",
+    "autoUpdate": "Auto-Update",
+    "lap": "Lap {{index}}",
+    "sprintFinished": "Sprint Finished!",
+    "reference": "Reference",
+    "sectors": "Sectors",
+    "newPersonalBest": "New Personal Best!",
+    "updateReferencePrompt": "Would you like to update the reference track with this new record?",
+    "slowerThanBest": "Slower than Best ({{time}})"
+  },
+  "charts": {
+    "zoomHint": "Use slider below to zoom",
+    "speed": "Speed",
+    "speedWithUnit": "Speed (km/h)",
+    "gForce": "G-Force Analysis",
+    "totalG": "Total G",
+    "longG": "Long G",
+    "latG": "Lat G",
+    "legendLong": "Red: Long G",
+    "legendLat": "Blue: Lat G",
+    "legendTotal": "Yellow: Total G"
+  },
+  "mapMode": {
+    "dt-absolute": "DT Baseline",
+    "dt-trend": "DT Trend",
+    "speed-heatmap": "Speed Heatmap"
+  },
+  "gps": {
+    "errors": {
+      "unsupported": "Geolocation is not supported by your browser",
+      "secureContextRequired": "Safari requires HTTPS for GPS on mobile devices. Open this app via https:// or localhost.",
+      "permissionDenied": "Location permission denied. In Safari: Settings > Safari > Location > Allow, then reload.",
+      "positionUnavailable": "GPS position unavailable. Move to open sky and ensure Location Services is enabled.",
+      "timeout": "GPS timeout. Please keep the page active and tap Retry GPS.",
+      "requestSlow": "GPS request is taking too long. Keep the app in foreground and tap Retry GPS.",
+      "permissionDialogPending": "Waiting for Android permission dialog...",
+      "permissionPromptNoResponse": "No response from location permission prompt. Check browser site permissions and system Location setting, then retry.",
+      "unknown": "Failed to get GPS location."
+    }
+  }
+}

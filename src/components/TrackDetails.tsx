@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MapViewMode, getNextMapViewMode } from '../utils/map';
 import { MapModeToggle } from './MapModeToggle';
 import { LapAnalysisCharts } from './LapAnalysisCharts';
+import { useI18n } from '../i18n';
 
 interface Props {
     track: Track;
@@ -24,6 +25,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     const [isEditingSectors, setIsEditingSectors] = useState(false);
     const [visibleLapCount, setVisibleLapCount] = useState(LAP_HISTORY_BATCH);
     const [pendingDeleteLap, setPendingDeleteLap] = useState<Lap | null>(null);
+    const { t, formatDateTime } = useI18n();
 
     const reversedLaps = useMemo(() => [...(track.laps ?? [])].reverse(), [track.laps]);
     const displayedLaps = useMemo(
@@ -232,8 +234,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
     };
 
     const formatLapDateTime = (timestamp: number) => {
-        const date = new Date(timestamp);
-        return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        return formatDateTime(timestamp);
     };
 
     const displayedPoints = selectedLap ? selectedLap.points : track.points;
@@ -252,7 +253,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                         <h2 className="truncate text-xl font-bold tracking-tight">{track.name}</h2>
                         {selectedLap && (
                             <div className="text-[10px] font-bold text-accent-green uppercase tracking-widest">
-                                Analyzing Lap: {formatTime(selectedLap.time)}
+                                {t('trackDetails.analyzingLap', { time: formatTime(selectedLap.time) })}
                             </div>
                         )}
                     </div>
@@ -274,7 +275,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     
                     {/* Map Mode Label */}
                     <div className="absolute bottom-4 left-6 apex-pill px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                        Mode: {mapMode.replace('-', ' ')}
+                        {t('trackDetails.mode', { mode: t(`mapMode.${mapMode}`) })}
                     </div>
                 </div>
 
@@ -284,7 +285,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                         <div className="apex-panel p-5 rounded-3xl">
                             <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-2">
                                 <Trophy size={14} className="text-accent-green" />
-                                Best Lap
+                                {t('trackDetails.bestLap')}
                             </div>
                             <div className="text-3xl font-sans font-bold text-accent-green tabular-nums">
                                 {formatTime(track.bestTime)}
@@ -293,10 +294,10 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                         <div className="apex-panel p-5 rounded-3xl">
                             <div className="flex items-center gap-2 text-text-secondary text-xs font-bold uppercase tracking-widest mb-2">
                                 <Ruler size={14} />
-                                Distance
+                                {t('trackDetails.distance')}
                             </div>
                             <div className="text-3xl font-sans font-bold tabular-nums">
-                                {(track.totalDistance / 1000).toFixed(2)} <span className="text-sm font-sans text-text-secondary">km</span>
+                                {(track.totalDistance / 1000).toFixed(2)} <span className="text-sm font-sans text-text-secondary">{t('common.units.km')}</span>
                             </div>
                         </div>
                     </div>
@@ -319,21 +320,21 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
                             <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
-                                <History size={14} /> Lap History
+                                <History size={14} /> {t('trackDetails.lapHistory')}
                             </h3>
                             {selectedLap && (
                                 <button 
                                     onClick={() => setSelectedLap(null)}
                                     className="text-[10px] font-bold text-accent-red uppercase tracking-widest hover:underline"
                                 >
-                                    Reset View
+                                    {t('trackDetails.resetView')}
                                 </button>
                             )}
                         </div>
                         
                         {reversedLaps.length === 0 ? (
                             <div className="apex-panel-muted p-8 rounded-3xl text-center text-text-secondary border-dashed">
-                                No detailed history available. Record new laps to see analysis.
+                                {t('trackDetails.noDetailedHistory')}
                             </div>
                         ) : (
                             <div className="space-y-2">
@@ -361,7 +362,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             {lap.time === track.bestTime && (
-                                                <span className="text-[10px] font-bold bg-accent-green/20 text-accent-green px-2 py-0.5 rounded-full uppercase tracking-wider">Record</span>
+                                                <span className="text-[10px] font-bold bg-accent-green/20 text-accent-green px-2 py-0.5 rounded-full uppercase tracking-wider">{t('trackDetails.record')}</span>
                                             )}
                                             <Edit3 size={14} className="text-white/20" />
                                             <button
@@ -370,7 +371,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                                     setPendingDeleteLap(lap);
                                                 }}
                                                 className="p-1.5 rounded-full text-text-secondary hover:text-accent-red hover:bg-accent-red/10 transition-colors"
-                                                title="Delete this lap"
+                                                title={t('trackDetails.deleteThisLap')}
                                             >
                                                 <Trash2 size={14} />
                                             </button>
@@ -382,7 +383,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                         onClick={() => setVisibleLapCount((count) => Math.min(count + LAP_HISTORY_BATCH, reversedLaps.length))}
                                         className="w-full py-3 rounded-2xl apex-panel-muted hover:border-white/20 border border-white/10 text-xs font-bold uppercase tracking-widest text-text-secondary hover:text-white transition-colors"
                                     >
-                                        More
+                                        {t('common.buttons.more')}
                                     </button>
                                 )}
                             </div>
@@ -393,7 +394,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                     <div className="apex-panel p-6 rounded-3xl">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
-                                <MapIcon size={14} /> Track Info
+                                <MapIcon size={14} /> {t('trackDetails.trackInfo')}
                             </h3>
                             <button 
                                 onClick={() => setIsEditingSectors(!isEditingSectors)}
@@ -404,30 +405,30 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                         </div>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
-                                <span className="text-text-secondary">Type</span>
-                                <span className="font-bold capitalize">{track.type}</span>
+                                <span className="text-text-secondary">{t('trackDetails.type')}</span>
+                                <span className="font-bold">{t(`track.types.${track.type}`)}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-text-secondary">Total Laps</span>
+                                <span className="text-text-secondary">{t('trackDetails.totalLaps')}</span>
                                 <span className="font-bold">{track.history?.length || 0}</span>
                             </div>
                             
                             {/* Sectors */}
                             <div className="pt-4 border-t border-white/5">
                                 <div className="flex justify-between items-center mb-2">
-                                    <span className="text-text-secondary text-xs font-bold uppercase tracking-widest">Sectors</span>
+                                    <span className="text-text-secondary text-xs font-bold uppercase tracking-widest">{t('trackDetails.sectors')}</span>
                                     {isEditingSectors && (
                                         <button
                                             onClick={createSectorFromTrack}
                                             disabled={(track.sectors?.length || 0) >= MAX_SECTOR_GATES}
                                             className="text-[10px] font-bold text-accent-green disabled:text-text-secondary disabled:cursor-not-allowed flex items-center gap-1"
                                         >
-                                            <Plus size={12} /> {(track.sectors?.length || 0) >= MAX_SECTOR_GATES ? 'Max 3 Segments' : 'Add Sector'}
+                                            <Plus size={12} /> {(track.sectors?.length || 0) >= MAX_SECTOR_GATES ? t('trackDetails.maxSegments') : t('trackDetails.addSector')}
                                         </button>
                                     )}
                                 </div>
                                 {!track.sectors || track.sectors.length === 0 ? (
-                                    <div className="text-xs text-text-secondary italic">No sectors defined</div>
+                                    <div className="text-xs text-text-secondary italic">{t('trackDetails.noSectors')}</div>
                                 ) : (
                                     <div className="space-y-2">
                                         {track.sectors.map((s, i) => {
@@ -435,7 +436,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                             return (
                                                 <div key={i} className="bg-white/5 p-2 rounded-lg text-sm space-y-1.5">
                                                     <div className="flex justify-between items-center">
-                                                        <span>{s.name || `Sector ${i + 1}`}</span>
+                                                        <span>{s.name || t('track.sector', { index: i + 1 })}</span>
                                                         {isEditingSectors && <X size={14} className="text-accent-red cursor-pointer" onClick={() => removeSector(i)} />}
                                                     </div>
                                                     {isEditingSectors ? (
@@ -455,7 +456,7 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
                                                                 }}
                                                                 className="w-20 px-2 py-1 rounded-md bg-black/25 border border-white/10 text-right tabular-nums"
                                                             />
-                                                            <span className="text-[10px] text-text-secondary uppercase tracking-widest">km</span>
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-widest">{t('common.units.km')}</span>
                                                         </div>
                                                     ) : null}
                                                 </div>
@@ -471,21 +472,21 @@ export function TrackDetails({ track, onBack, onUpdateTrack }: Props) {
             {pendingDeleteLap && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPendingDeleteLap(null)}>
                     <div className="apex-panel w-full max-w-sm max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
-                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">Delete Lap Record</div>
+                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">{t('trackDetails.deleteLapTitle')}</div>
                         <div className="text-lg font-semibold mb-1">{formatTime(pendingDeleteLap.time)}</div>
-                        <p className="text-sm text-text-secondary mb-5">This lap will be removed permanently from history.</p>
+                        <p className="text-sm text-text-secondary mb-5">{t('trackDetails.deleteLapDescription')}</p>
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => setPendingDeleteLap(null)}
                                 className="flex-1 apex-btn-secondary py-2.5 rounded-xl"
                             >
-                                Cancel
+                                {t('common.buttons.cancel')}
                             </button>
                             <button
                                 onClick={confirmDeleteLap}
                                 className="flex-1 py-2.5 rounded-xl font-bold bg-accent-red/90 text-white hover:bg-accent-red transition-colors"
                             >
-                                Delete
+                                {t('common.buttons.delete')}
                             </button>
                         </div>
                     </div>

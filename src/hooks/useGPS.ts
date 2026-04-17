@@ -12,7 +12,18 @@ export interface GPSData {
 // --- Singleton State ---
 let isSimulating = false;
 let globalData: GPSData | null = null;
-let globalError: string | null = null;
+export type GPSErrorKey =
+    | 'unsupported'
+    | 'secureContextRequired'
+    | 'permissionDenied'
+    | 'positionUnavailable'
+    | 'timeout'
+    | 'requestSlow'
+    | 'permissionDialogPending'
+    | 'permissionPromptNoResponse'
+    | 'unknown';
+
+let globalError: GPSErrorKey | null = null;
 let simSpeedKmh = 72; // Default 72 km/h
 const listeners = new Set<() => void>();
 const GPS_RATE_MIN = 0.2;
@@ -67,17 +78,17 @@ const hasSecureLocationContext = () => {
     return window.isSecureContext || isLocalhost;
 };
 
-const getGeoErrorMessage = (err: GeolocationPositionError) => {
+const getGeoErrorMessage = (err: GeolocationPositionError): GPSErrorKey => {
     if (err.code === err.PERMISSION_DENIED) {
-        return 'Location permission denied. In Safari: Settings > Safari > Location > Allow, then reload.';
+        return 'permissionDenied';
     }
     if (err.code === err.POSITION_UNAVAILABLE) {
-        return 'GPS position unavailable. Move to open sky and ensure Location Services is enabled.';
+        return 'positionUnavailable';
     }
     if (err.code === err.TIMEOUT) {
-        return 'GPS timeout. Please keep the page active and tap Retry GPS.';
+        return 'timeout';
     }
-    return err.message || 'Failed to get GPS location.';
+    return 'unknown';
 };
 
 const startSimulation = () => {
@@ -142,12 +153,12 @@ const stopRealGPS = () => {
 const startRealGPS = () => {
     if (isSimulating) return;
     if (!('geolocation' in navigator)) {
-        globalError = 'Geolocation is not supported by your browser';
+        globalError = 'unsupported';
         notify();
         return;
     }
     if (!hasSecureLocationContext()) {
-        globalError = 'Safari requires HTTPS for GPS on mobile devices. Open this app via https:// or localhost.';
+        globalError = 'secureContextRequired';
         notify();
         return;
     }
@@ -156,7 +167,7 @@ const startRealGPS = () => {
     clearRealGPSWatchdog();
     realGPSWatchdogTimeout = window.setTimeout(() => {
         if (lastRealGPSUpdateAt === 0 && watchId !== null && !isPermissionRequestInFlight) {
-            globalError = 'GPS request is taking too long. Keep the app in foreground and tap Retry GPS.';
+            globalError = 'requestSlow';
             notify();
         }
     }, FIRST_FIX_WATCHDOG_MS);
@@ -197,18 +208,18 @@ const startRealGPS = () => {
 
 export const requestGPSPermission = () => {
     if (!('geolocation' in navigator)) {
-        globalError = 'Geolocation is not supported by your browser';
+        globalError = 'unsupported';
         notify();
         return;
     }
     if (!hasSecureLocationContext()) {
-        globalError = 'Safari requires HTTPS for GPS on mobile devices. Open this app via https:// or localhost.';
+        globalError = 'secureContextRequired';
         notify();
         return;
     }
 
     if (isPermissionRequestInFlight) {
-        globalError = 'Waiting for Android permission dialog...';
+        globalError = 'permissionDialogPending';
         notify();
         return;
     }
@@ -223,7 +234,7 @@ export const requestGPSPermission = () => {
             return;
         }
         isPermissionRequestInFlight = false;
-        globalError = 'No response from location permission prompt. Check browser site permissions and system Location setting, then retry.';
+        globalError = 'permissionPromptNoResponse';
         notify();
     }, PERMISSION_REQUEST_WATCHDOG_MS);
 
@@ -355,5 +366,4 @@ export function useGPS() {
         setGPSRefreshRateHz,
     };
 }
-
 

@@ -7,9 +7,12 @@ import { TrackDetails } from './components/TrackDetails';
 import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
 import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
-import { getCurrentUser, login, logout, SessionUser } from './sync/auth';
+import { AuthError, getCurrentUser, login, logout, SessionUser } from './sync/auth';
+import { Locale, useI18n } from './i18n';
 
 const WAKE_LOCK_STORAGE_KEY = 'apex_keep_screen_awake';
+type WakeLockErrorKey = 'unsupported' | 'failed';
+type LoginErrorKey = 'missingCredentials' | 'invalidCredentials' | 'loginFailed';
 
 type WakeLockNavigator = Navigator & {
     wakeLock?: {
@@ -20,6 +23,7 @@ type WakeLockNavigator = Navigator & {
 function DevTools() {
     const { simMode, simSpeed, toggleSimulation, setSimulationSpeed } = useGPS();
     const [isOpen, setIsOpen] = useState(false);
+    const { t } = useI18n();
 
     if (!isOpen) {
         return (
@@ -37,7 +41,7 @@ function DevTools() {
     return (
         <div className="fixed app-floating-action bg-black/90 backdrop-blur-xl border border-white/10 p-5 rounded-3xl shadow-2xl z-50 w-64 max-w-[calc(100vw-var(--safe-left)-var(--safe-right)-2rem)]">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-sm uppercase tracking-widest text-text-secondary">Dev Tools</h3>
+                <h3 className="font-bold text-sm uppercase tracking-widest text-text-secondary">{t('devTools.title')}</h3>
                 <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white">✕</button>
             </div>
 
@@ -47,12 +51,12 @@ function DevTools() {
                     simMode ? 'bg-accent-green text-black' : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
             >
-                {simMode ? 'Disable Simulator' : 'Enable Simulator'}
+                {simMode ? t('devTools.disableSimulator') : t('devTools.enableSimulator')}
             </button>
 
             {simMode && (
                 <div className="bg-white/5 p-4 rounded-2xl">
-                    <div className="text-xs font-bold text-text-secondary mb-2 uppercase tracking-widest text-center">Sim Speed</div>
+                    <div className="text-xs font-bold text-text-secondary mb-2 uppercase tracking-widest text-center">{t('devTools.simSpeed')}</div>
                     <div className="flex items-center justify-between">
                         <button
                             onClick={() => setSimulationSpeed(simSpeed - 10)}
@@ -75,6 +79,7 @@ function DevTools() {
 }
 
 export default function App() {
+    const { locale, setLocale, t } = useI18n();
     const [view, setView] = useState<'home' | 'record' | 'race' | 'details'>('home');
     const [tracks, setTracks] = useState<Track[]>([]);
     const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
@@ -106,7 +111,7 @@ export default function App() {
         return window.localStorage.getItem(WAKE_LOCK_STORAGE_KEY) === 'true';
     });
     const [wakeLockActive, setWakeLockActive] = useState(false);
-    const [wakeLockError, setWakeLockError] = useState<string | null>(null);
+    const [wakeLockError, setWakeLockError] = useState<WakeLockErrorKey | null>(null);
     const wakeLockRef = useRef<WakeLockSentinel | null>(null);
     const [pendingDeleteTrack, setPendingDeleteTrack] = useState<Track | null>(null);
     const [authUser, setAuthUser] = useState<SessionUser | null>(null);
@@ -114,7 +119,7 @@ export default function App() {
     const [loginUsername, setLoginUsername] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
     const [loginBusy, setLoginBusy] = useState(false);
-    const [loginError, setLoginError] = useState<string | null>(null);
+    const [loginError, setLoginError] = useState<LoginErrorKey | null>(null);
 
     const normalizeTracks = (incoming: Track[]) => {
         const now = Date.now();
@@ -278,36 +283,36 @@ export default function App() {
 
     const formatSyncTime = (timestamp: number | null) => {
         if (!timestamp) {
-            return 'never';
+            return t('app.sync.relative.never');
         }
 
         const deltaMs = Date.now() - timestamp;
         if (deltaMs < 60000) {
-            return 'just now';
+            return t('app.sync.relative.justNow');
         }
 
         const minutes = Math.floor(deltaMs / 60000);
         if (minutes < 60) {
-            return `${minutes}m ago`;
+            return t('app.sync.relative.minutesAgo', { count: minutes });
         }
 
         const hours = Math.floor(minutes / 60);
         if (hours < 24) {
-            return `${hours}h ago`;
+            return t('app.sync.relative.hoursAgo', { count: hours });
         }
 
         const days = Math.floor(hours / 24);
-        return `${days}d ago`;
+        return t('app.sync.relative.daysAgo', { count: days });
     };
 
     const syncText =
         syncStatus.state === 'syncing'
-            ? 'Syncing to cloud'
+            ? t('app.sync.states.syncing')
             : syncStatus.state === 'offline'
-            ? 'Offline mode active'
+            ? t('app.sync.states.offline')
             : syncStatus.state === 'error'
-            ? 'Sync paused, retry queued'
-            : 'Cloud up to date';
+            ? t('app.sync.states.error')
+            : t('app.sync.states.idle');
 
     const SyncIcon =
         syncStatus.state === 'syncing'
@@ -363,7 +368,7 @@ export default function App() {
 
         if (!wakeLockApi) {
             setWakeLockActive(false);
-            setWakeLockError('Keep screen awake is not supported on this browser/device.');
+            setWakeLockError('unsupported');
             return;
         }
 
@@ -381,7 +386,7 @@ export default function App() {
             setWakeLockError(null);
         } catch {
             setWakeLockActive(false);
-            setWakeLockError('Unable to keep screen awake. Check battery saver and browser permissions.');
+            setWakeLockError('failed');
         }
     }, []);
 
@@ -425,7 +430,7 @@ export default function App() {
     const handleLogin = async (e: FormEvent) => {
         e.preventDefault();
         if (!loginUsername.trim() || !loginPassword) {
-            setLoginError('Please enter username and password');
+            setLoginError('missingCredentials');
             return;
         }
 
@@ -436,8 +441,7 @@ export default function App() {
             setAuthUser(user);
             setLoginPassword('');
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Login failed';
-            setLoginError(message);
+            setLoginError(error instanceof AuthError && error.code === 'invalid_credentials' ? 'invalidCredentials' : 'loginFailed');
         } finally {
             setLoginBusy(false);
         }
@@ -452,10 +456,19 @@ export default function App() {
         setLoginError(null);
     };
 
+    const loginErrorText =
+        loginError === 'missingCredentials'
+            ? t('app.auth.missingCredentials')
+            : loginError === 'invalidCredentials'
+            ? t('app.auth.errors.invalidCredentials')
+            : loginError === 'loginFailed'
+            ? t('app.auth.errors.loginFailed')
+            : null;
+
     if (authLoading) {
         return (
             <div className="h-full bg-bg-color text-white flex items-center justify-center">
-                <div className="apex-panel rounded-3xl px-6 py-5 text-sm text-text-secondary">Checking session...</div>
+                <div className="apex-panel rounded-3xl px-6 py-5 text-sm text-text-secondary">{t('app.auth.checkingSession')}</div>
             </div>
         );
     }
@@ -465,12 +478,12 @@ export default function App() {
             <div className="h-full bg-bg-color text-white flex items-center justify-center px-5">
                 <form onSubmit={handleLogin} className="w-full max-w-sm apex-panel rounded-3xl p-6 space-y-4">
                     <div>
-                        <h2 className="text-2xl font-bold">Sign In</h2>
-                        <p className="text-sm text-text-secondary mt-1">Use your configured account to access cloud sync.</p>
+                        <h2 className="text-2xl font-bold">{t('app.auth.title')}</h2>
+                        <p className="text-sm text-text-secondary mt-1">{t('app.auth.subtitle')}</p>
                     </div>
 
                     <label className="block space-y-1">
-                        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Username</span>
+                        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">{t('app.auth.username')}</span>
                         <input
                             value={loginUsername}
                             onChange={(e) => setLoginUsername(e.target.value)}
@@ -480,7 +493,7 @@ export default function App() {
                     </label>
 
                     <label className="block space-y-1">
-                        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Password</span>
+                        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">{t('app.auth.password')}</span>
                         <input
                             type="password"
                             value={loginPassword}
@@ -490,14 +503,14 @@ export default function App() {
                         />
                     </label>
 
-                    {loginError ? <div className="text-xs text-accent-red font-bold">{loginError}</div> : null}
+                    {loginErrorText ? <div className="text-xs text-accent-red font-bold">{loginErrorText}</div> : null}
 
                     <button
                         type="submit"
                         disabled={loginBusy}
                         className="w-full apex-btn-primary py-2.5 disabled:opacity-60"
                     >
-                        {loginBusy ? 'Signing in...' : 'Sign In'}
+                        {loginBusy ? t('app.auth.signingIn') : t('app.auth.signIn')}
                     </button>
                 </form>
             </div>
@@ -511,7 +524,7 @@ export default function App() {
                 <SyncIcon size={14} className={`${syncAccentClass} ${syncStatus.state === 'syncing' ? 'animate-spin' : ''}`} />
                 <span className="min-w-0 truncate font-medium text-white/90">{syncText}</span>
                 {syncStatus.pending > 0 ? (
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/80">{syncStatus.pending} queued</span>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/80">{t('app.sync.queued', { count: syncStatus.pending })}</span>
                 ) : null}
                 <span className="text-[10px] text-white/50 compact-hide">{formatSyncTime(syncStatus.lastSyncAt)}</span>
             </div>
@@ -553,7 +566,7 @@ export default function App() {
                     >
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary flex items-center gap-2">
-                                <Settings size={14} /> Settings
+                                <Settings size={14} /> {t('app.settings.title')}
                             </h3>
                             <button onClick={() => setIsSettingsOpen(false)} className="p-2 apex-pill hover:bg-white/10 transition-colors">
                                 <X size={16} />
@@ -563,21 +576,21 @@ export default function App() {
                         <div className="space-y-5">
                             <div className="apex-panel-muted rounded-2xl p-4 flex items-center justify-between">
                                 <div>
-                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Signed in</div>
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.signedIn')}</div>
                                     <div className="text-xs text-white/90 mt-1">{authUser.displayName || authUser.userId}</div>
                                 </div>
                                 <button
                                     onClick={handleLogout}
                                     className="px-3 py-2 rounded-xl bg-white/10 text-xs font-bold uppercase tracking-widest hover:bg-white/20 transition-colors"
                                 >
-                                    Logout
+                                    {t('common.buttons.logout')}
                                 </button>
                             </div>
 
                             <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
                                 <div className="flex items-center justify-between text-sm">
-                                    <span className="text-text-secondary font-bold uppercase tracking-widest text-[10px]">Location Refresh Rate</span>
-                                    <span className="font-sans tabular-nums text-white">{gpsHz.toFixed(1)} Hz</span>
+                                    <span className="text-text-secondary font-bold uppercase tracking-widest text-[10px]">{t('app.settings.locationRefreshRate')}</span>
+                                    <span className="font-sans tabular-nums text-white">{gpsHz.toFixed(1)} {t('common.units.hz')}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -590,19 +603,41 @@ export default function App() {
                                     className="w-full accent-[--accent-green] disabled:opacity-40"
                                 />
                                 <p className="text-[10px] text-text-secondary">
-                                    {gpsRateSupported ? 'Applied immediately. Real GPS rate may still be capped by device/browser (often around 1Hz).' : 'Not supported on this device/browser.'}
+                                    {gpsRateSupported ? t('app.settings.locationRefreshRateSupported') : t('app.settings.locationRefreshRateUnsupported')}
                                 </p>
+                            </div>
+
+                            <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
+                                <div>
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.language')}</div>
+                                    <div className="text-xs text-white/80 mt-1">{t('app.settings.languageHelp')}</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(['en', 'zh-CN'] as Locale[]).map((language) => (
+                                        <button
+                                            key={language}
+                                            onClick={() => setLocale(language)}
+                                            className={`rounded-xl border px-3 py-2 text-sm font-bold transition-colors ${
+                                                locale === language
+                                                    ? 'bg-accent-green text-black border-accent-green'
+                                                    : 'bg-white/5 text-white border-white/10 hover:bg-white/10'
+                                            }`}
+                                        >
+                                            {t(`common.languageNames.${language}`)}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="apex-panel-muted rounded-2xl p-4 flex items-center justify-between">
                                 <div>
-                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Debug Tools</div>
-                                    <div className="text-xs text-white/80 mt-1">Show simulator and diagnostics panel</div>
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.debugTools')}</div>
+                                    <div className="text-xs text-white/80 mt-1">{t('app.settings.debugToolsDescription')}</div>
                                 </div>
                                 <button
                                     onClick={handleDebugToggle}
                                     className={`w-14 h-8 rounded-full border transition-colors ${debugEnabled ? 'bg-accent-green border-accent-green' : 'bg-white/10 border-white/20'}`}
-                                    aria-label="Toggle debug tools"
+                                    aria-label={t('app.settings.toggleDebugTools')}
                                 >
                                     <span className={`block h-6 w-6 rounded-full bg-white transition-transform ${debugEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
                                 </button>
@@ -611,13 +646,13 @@ export default function App() {
                             <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Keep Screen Awake</div>
-                                        <div className="text-xs text-white/80 mt-1">Prevent display sleep while app is open</div>
+                                        <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.keepScreenAwake')}</div>
+                                        <div className="text-xs text-white/80 mt-1">{t('app.settings.keepScreenAwakeDescription')}</div>
                                     </div>
                                     <button
                                         onClick={handleWakeLockToggle}
                                         className={`w-14 h-8 rounded-full border transition-colors ${keepScreenAwake ? 'bg-accent-green border-accent-green' : 'bg-white/10 border-white/20'}`}
-                                        aria-label="Toggle keep screen awake"
+                                        aria-label={t('app.settings.toggleKeepScreenAwake')}
                                     >
                                         <span className={`block h-6 w-6 rounded-full bg-white transition-transform ${keepScreenAwake ? 'translate-x-7' : 'translate-x-1'}`} />
                                     </button>
@@ -625,11 +660,11 @@ export default function App() {
                                 <p className="text-[10px] text-text-secondary">
                                     {keepScreenAwake
                                         ? wakeLockActive
-                                            ? 'Active: display sleep is currently blocked.'
-                                            : 'Enabling wake lock... keep this tab in foreground on Android.'
-                                        : 'Off: screen can sleep normally.'}
+                                            ? t('app.settings.wakeLock.active')
+                                            : t('app.settings.wakeLock.enabling')
+                                        : t('app.settings.wakeLock.off')}
                                 </p>
-                                {wakeLockError ? <p className="text-[10px] text-accent-red">{wakeLockError}</p> : null}
+                                {wakeLockError ? <p className="text-[10px] text-accent-red">{t(`app.settings.wakeLock.${wakeLockError}`)}</p> : null}
                             </div>
                         </div>
                     </div>
@@ -638,21 +673,21 @@ export default function App() {
             {pendingDeleteTrack && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPendingDeleteTrack(null)}>
                     <div className="apex-panel w-full max-w-sm max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
-                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">Confirm Delete</div>
+                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">{t('app.deleteTrack.title')}</div>
                         <div className="text-lg font-semibold mb-1 truncate">{pendingDeleteTrack.name}</div>
-                        <p className="text-sm text-text-secondary mb-5">This track and its lap history will be removed.</p>
+                        <p className="text-sm text-text-secondary mb-5">{t('app.deleteTrack.description')}</p>
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => setPendingDeleteTrack(null)}
                                 className="flex-1 apex-btn-secondary py-2.5 rounded-xl"
                             >
-                                Cancel
+                                {t('common.buttons.cancel')}
                             </button>
                             <button
                                 onClick={confirmDeleteTrack}
                                 className="flex-1 py-2.5 rounded-xl font-bold bg-accent-red/90 text-white hover:bg-accent-red transition-colors"
                             >
-                                Delete
+                                {t('common.buttons.delete')}
                             </button>
                         </div>
                     </div>

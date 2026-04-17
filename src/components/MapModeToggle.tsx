@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Layers } from 'lucide-react';
 import { MapViewMode } from '../utils/map';
+import { useI18n } from '../i18n';
 
 interface Props {
     mode: MapViewMode;
@@ -9,14 +10,9 @@ interface Props {
     className?: string;
 }
 
-const MODE_LABELS: Record<MapViewMode, string> = {
-    'dt-absolute': 'DT基准',
-    'dt-trend': 'DT变化',
-    'speed-heatmap': '速度热力图'
-};
-
 export function MapModeToggle({ mode, onToggle, className = "" }: Props) {
     const [isExpanded, setIsExpanded] = useState(false);
+    const { t } = useI18n();
 
     useEffect(() => {
         if (isExpanded) {
@@ -60,12 +56,11 @@ export function MapModeToggle({ mode, onToggle, className = "" }: Props) {
                         transition={{ duration: 0.2 }}
                         className="text-[10px] font-black uppercase tracking-widest pr-5"
                     >
-                        {MODE_LABELS[mode]}
+                        {t(`mapMode.${mode}`)}
                     </motion.span>
                 )}
             </AnimatePresence>
         </motion.button>
     );
 }
-
 
