@@ -206,7 +206,7 @@ export function AdminPanel({ currentUserId, onBack }: Props) {
                 </div>
 
                 <div className="grid min-h-0 grid-cols-[1.05fr_0.95fr] gap-5">
-                    <section className="apex-panel flex min-h-0 flex-col rounded-[2rem] p-5">
+                    <section className="apex-panel flex min-h-0 flex-col rounded-4xl p-5">
                         <div className="mb-4 flex items-center justify-between">
                             <div>
                                 <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">{t('admin.userList.title')}</div>
@@ -221,9 +221,9 @@ export function AdminPanel({ currentUserId, onBack }: Props) {
 
                         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                             {isLoading ? (
-                                <div className="rounded-[1.5rem] apex-panel-muted p-5 text-sm text-text-secondary">{t('admin.messages.loading')}</div>
+                                <div className="rounded-3xl apex-panel-muted p-5 text-sm text-text-secondary">{t('admin.messages.loading')}</div>
                             ) : users.length === 0 ? (
-                                <div className="rounded-[1.5rem] apex-panel-muted p-5 text-sm text-text-secondary">{t('admin.messages.empty')}</div>
+                                <div className="rounded-3xl apex-panel-muted p-5 text-sm text-text-secondary">{t('admin.messages.empty')}</div>
                             ) : (
                                 users.map((user) => {
                                     const isSelected = user.userId === selectedUserId;
@@ -231,7 +231,7 @@ export function AdminPanel({ currentUserId, onBack }: Props) {
                                         <button
                                             key={user.userId}
                                             onClick={() => applyUserToForm(user)}
-                                            className={`w-full rounded-[1.5rem] border p-4 text-left transition-colors ${
+                                            className={`w-full rounded-3xl border p-4 text-left transition-colors ${
                                                 isSelected
                                                     ? 'border-accent-green bg-accent-green/8'
                                                     : 'border-white/8 bg-white/4 hover:bg-white/8'
@@ -272,7 +272,7 @@ export function AdminPanel({ currentUserId, onBack }: Props) {
                         </div>
                     </section>
 
-                    <section className="apex-panel min-h-0 overflow-y-auto rounded-[2rem] p-5">
+                    <section className="apex-panel min-h-0 overflow-y-auto rounded-4xl p-5">
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">
@@ -375,7 +375,7 @@ export function AdminPanel({ currentUserId, onBack }: Props) {
                             </div>
 
                             {mode === 'edit' && selectedUserId ? (
-                                <div className="rounded-[1.5rem] apex-panel-muted p-4 text-xs leading-6 text-text-secondary">
+                                <div className="rounded-3xl apex-panel-muted p-4 text-xs leading-6 text-text-secondary">
                                     <div>{t('admin.editor.createdAt', { time: formatDateTime(users.find((user) => user.userId === selectedUserId)?.createdAt ?? Date.now()) })}</div>
                                     <div>{t('admin.editor.updatedAt', { time: formatDateTime(users.find((user) => user.userId === selectedUserId)?.updatedAt ?? Date.now()) })}</div>
                                     {selectedUserId === currentUserId ? <div className="mt-1 text-amber-300">{t('admin.editor.selfGuard')}</div> : null}

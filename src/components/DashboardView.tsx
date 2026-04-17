@@ -31,7 +31,7 @@ export function DashboardView({
         return (
             <div className="h-full overflow-y-auto px-6 py-8 lg:px-10 lg:py-10">
                 <div className="mx-auto flex min-h-full max-w-3xl items-center justify-center">
-                    <div className="apex-panel w-full max-w-xl rounded-[2rem] p-8 text-center">
+                    <div className="apex-panel w-full max-w-xl rounded-4xl p-8 text-center">
                         <div className="mx-auto mb-5 flex h-18 w-18 items-center justify-center rounded-full bg-amber-400/10 text-amber-300">
                             <AlertTriangle size={34} />
                         </div>
@@ -55,7 +55,7 @@ export function DashboardView({
     return (
         <div className="h-full overflow-hidden px-5 py-5 lg:px-7 lg:py-7">
             <div className="grid h-full grid-cols-[280px_minmax(0,1fr)] gap-5">
-                <aside className="apex-panel flex h-full flex-col rounded-[2rem] p-5">
+                <aside className="apex-panel flex h-full flex-col rounded-4xl p-5">
                     <div>
                         <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-accent-green">
                             APEX DESKTOP
@@ -63,7 +63,7 @@ export function DashboardView({
                         <h1 className="mt-2 text-3xl font-semibold">{t('dashboard.title')}</h1>
                     </div>
 
-                    <div className="mt-6 rounded-[1.5rem] apex-panel-muted p-4">
+                    <div className="mt-6 rounded-3xl apex-panel-muted p-4">
                         <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">
                             {t('dashboard.account')}
                         </div>
@@ -109,7 +109,7 @@ export function DashboardView({
                         </button>
                     </div>
 
-                    <div className="mt-auto rounded-[1.5rem] bg-black/35 p-4">
+                    <div className="mt-auto rounded-3xl bg-black/35 p-4">
                         <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">
                             {t('dashboard.sync')}
                         </div>
@@ -143,7 +143,7 @@ export function DashboardView({
                     </section>
 
                     <section className="grid min-h-0 grid-cols-[1.35fr_0.9fr] gap-5">
-                        <div className="apex-panel flex min-h-0 flex-col rounded-[2rem] p-6">
+                        <div className="apex-panel flex min-h-0 flex-col rounded-4xl p-6">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">{t('dashboard.sections.overview')}</div>
@@ -156,15 +156,15 @@ export function DashboardView({
                                 ) : null}
                             </div>
                             <div className="mt-6 grid min-h-0 flex-1 grid-cols-2 gap-4">
-                                <div className="rounded-[1.5rem] apex-panel-muted p-5">
+                                <div className="rounded-3xl apex-panel-muted p-5">
                                     <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">{t('dashboard.placeholders.liveFeed.title')}</div>
                                     <p className="mt-3 text-sm leading-6 text-text-secondary">{t('dashboard.placeholders.liveFeed.description')}</p>
                                 </div>
-                                <div className="rounded-[1.5rem] apex-panel-muted p-5">
+                                <div className="rounded-3xl apex-panel-muted p-5">
                                     <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">{t('dashboard.placeholders.analytics.title')}</div>
                                     <p className="mt-3 text-sm leading-6 text-text-secondary">{t('dashboard.placeholders.analytics.description')}</p>
                                 </div>
-                                <div className="col-span-2 rounded-[1.5rem] apex-panel-muted p-5">
+                                <div className="col-span-2 rounded-3xl apex-panel-muted p-5">
                                     <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">{t('dashboard.placeholders.professional.title')}</div>
                                     <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary">{t('dashboard.placeholders.professional.description')}</p>
                                 </div>
@@ -172,7 +172,7 @@ export function DashboardView({
                         </div>
 
                         <div className="grid min-h-0 grid-rows-2 gap-5">
-                            <div className="apex-panel rounded-[2rem] p-6">
+                            <div className="apex-panel rounded-4xl p-6">
                                 <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">{t('dashboard.placeholders.modules.title')}</div>
                                 <div className="mt-5 space-y-3">
                                     {['pitWall', 'events', 'exports'].map((key) => (
@@ -183,7 +183,7 @@ export function DashboardView({
                                     ))}
                                 </div>
                             </div>
-                            <div className="apex-panel rounded-[2rem] p-6">
+                            <div className="apex-panel rounded-4xl p-6">
                                 <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-text-secondary">{t('dashboard.placeholders.guidance.title')}</div>
                                 <p className="mt-4 text-sm leading-6 text-text-secondary">{t('dashboard.placeholders.guidance.description')}</p>
                             </div>
