@@ -73,16 +73,17 @@
     "settings": {
       "title": "设置",
       "signedIn": "已登录",
+      "permissionDashboard": "Dashboard 权限",
+      "permissionAdmin": "Admin 权限",
+      "desktopMode": "Dashboard",
+      "enterDesktop": "进入 Dashboard",
+      "desktopModeCurrent": "当前位于 Dashboard",
+      "backToMobile": "返回移动端",
       "locationRefreshRate": "定位刷新频率",
-      "locationRefreshRateSupported": "会立即生效，但真实 GPS 频率仍可能受设备或浏览器限制（通常约 1Hz）。",
-      "locationRefreshRateUnsupported": "当前设备或浏览器不支持。",
       "language": "语言",
-      "languageHelp": "对整个应用生效，并保存在当前设备上。",
       "debugTools": "调试工具",
-      "debugToolsDescription": "显示模拟器和诊断面板",
       "toggleDebugTools": "切换调试工具",
       "keepScreenAwake": "保持屏幕常亮",
-      "keepScreenAwakeDescription": "应用打开时阻止屏幕休眠",
       "toggleKeepScreenAwake": "切换保持屏幕常亮",
       "wakeLock": {
         "active": "已启用：当前会阻止屏幕休眠。",
@@ -95,6 +96,125 @@
     "deleteTrack": {
       "title": "确认删除",
       "description": "该赛道及其圈速历史将被移除。"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "account": "当前账号",
+    "sync": "同步状态",
+    "lastSync": "最近同步：{{time}}",
+    "pendingTasks": "待同步 {{count}} 项",
+    "backToMobile": "返回移动端",
+    "openAdmin": "进入后台管理",
+    "workspaceTitle": "专业展示面板",
+    "status": {
+      "enabled": "已启用",
+      "disabled": "未启用"
+    },
+    "permissions": {
+      "dashboard": "Dashboard",
+      "admin": "Admin"
+    },
+    "sections": {
+      "overview": "总览",
+      "admin": "后台管理"
+    },
+    "cards": {
+      "trackCount": "已同步赛道",
+      "trackCountHint": "当前账号下的本地+云端赛道数量。",
+      "syncStatus": "云同步状态",
+      "adminAccess": "后台权限",
+      "adminAccessHint": "拥有 admin 权限时可继续进入后台管理。"
+    },
+    "portrait": {
+      "title": "宽屏提示",
+      "heading": "请到宽屏设备上使用 Dashboard",
+      "description": "Dashboard 定位为专业信息展示后台，不针对竖屏设备做展示优化。请切换到横屏或桌面端后继续使用。"
+    },
+    "placeholders": {
+      "liveFeed": {
+        "title": "实时监看",
+        "description": "此区域预留给实时车辆状态、在线会话和赛道动态信息。"
+      },
+      "analytics": {
+        "title": "分析模块",
+        "description": "后续可接入速度分布、成绩趋势、车手维度对比等专业分析。"
+      },
+      "professional": {
+        "title": "专业展示定位",
+        "description": "Dashboard 将承载更高密度的信息模块与管理入口。当前先保留统一风格的专业信息展示骨架，供后续扩展。"
+      },
+      "modules": {
+        "title": "待接入模块",
+        "items": {
+          "pitWall": {
+            "title": "Pit Wall",
+            "description": "用于维护比赛窗口、车辆状态与赛段摘要。"
+          },
+          "events": {
+            "title": "Event Feed",
+            "description": "用于记录车手事件、系统告警与操作日志。"
+          },
+          "exports": {
+            "title": "Data Export",
+            "description": "用于管理报表导出、会话回放与数据下发。"
+          }
+        }
+      },
+      "guidance": {
+        "title": "说明",
+        "description": "如果当前账号具备 admin 权限，可从左侧或主区域入口进入后台管理；其他管理模块暂时保持占位。"
+      }
+    }
+  },
+  "admin": {
+    "title": "后台管理",
+    "subtitle": "用户管理",
+    "actions": {
+      "refresh": "刷新",
+      "back": "返回 Dashboard",
+      "newUser": "新增用户",
+      "saving": "保存中...",
+      "create": "创建用户",
+      "update": "更新用户",
+      "reset": "重置",
+      "delete": "删除用户"
+    },
+    "permissions": {
+      "dashboard": "Dashboard",
+      "admin": "Admin"
+    },
+    "status": {
+      "active": "启用",
+      "disabled": "停用"
+    },
+    "fields": {
+      "userId": "账号",
+      "displayName": "显示名称",
+      "password": "密码",
+      "passwordOptional": "密码（留空则不修改）"
+    },
+    "userList": {
+      "title": "用户列表",
+      "updatedAt": "最近更新：{{time}}"
+    },
+    "editor": {
+      "createTitle": "新建用户",
+      "editTitle": "编辑用户",
+      "createdAt": "创建时间：{{time}}",
+      "updatedAt": "更新时间：{{time}}",
+      "selfGuard": "当前登录账号不能删除自己，也不能移除自己的 admin 权限。"
+    },
+    "messages": {
+      "loading": "正在加载用户列表...",
+      "empty": "暂无用户数据。",
+      "created": "用户已创建。",
+      "updated": "用户已更新。",
+      "deleted": "用户已删除。",
+      "loadFailed": "加载用户失败",
+      "saveFailed": "保存用户失败",
+      "deleteFailed": "删除用户失败",
+      "confirmDelete": "确认删除账号 {{userId}} 吗？"
     }
   },
   "trackList": {

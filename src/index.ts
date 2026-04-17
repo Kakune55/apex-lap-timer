@@ -15,6 +15,8 @@ type SyncOperation = {
 type AuthUser = {
   userId: string;
   displayName: string | null;
+  dashboardAccess: boolean;
+  isAdmin: boolean;
 };
 
 type AppVars = {
@@ -22,10 +24,23 @@ type AppVars = {
   tokenHash: string | null;
 };
 
+type UserRow = {
+  user_id: string;
+  display_name: string | null;
+  password_hash: string;
+  password_salt: string;
+  password_iterations: number;
+  is_active: number;
+  dashboard_access: number;
+  is_admin: number;
+  created_at: number;
+  updated_at: number;
+};
+
 const app = new Hono<{ Bindings: AppBindings; Variables: AppVars }>();
 
 const USERS_TABLE_SQL =
-  "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, display_name TEXT, auth_provider TEXT NOT NULL DEFAULT 'local', password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL DEFAULT 100000, is_active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)";
+  "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, display_name TEXT, auth_provider TEXT NOT NULL DEFAULT 'local', password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL DEFAULT 100000, is_active INTEGER NOT NULL DEFAULT 1, dashboard_access INTEGER NOT NULL DEFAULT 0, is_admin INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)";
 const TRACKS_TABLE_SQL =
   "CREATE TABLE IF NOT EXISTS tracks (user_id TEXT NOT NULL, track_id TEXT NOT NULL, data TEXT, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, track_id), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)";
 const SESSIONS_TABLE_SQL =
@@ -57,6 +72,28 @@ function normalizeUserId(raw: string | undefined): string | null {
   }
 
   return trimmed;
+}
+
+function normalizeOptionalDisplayName(raw: string | undefined): string | null {
+  if (typeof raw !== "string") {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.slice(0, 64) : null;
+}
+
+function normalizePassword(raw: string | undefined): string | null {
+  if (typeof raw !== "string") {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length < 6 || trimmed.length > 128) {
+    return null;
+  }
+
+  return raw;
 }
 
 function parseBearerToken(headerValue: string | undefined): string | null {
@@ -101,6 +138,11 @@ function randomToken(byteLength: number): string {
   return base64FromBytes(bytes);
 }
 
+function randomHex(byteLength: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
+  return bytesToHex(bytes);
+}
+
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", utf8Buffer(value));
   return bytesToHex(new Uint8Array(digest));
@@ -131,9 +173,36 @@ async function verifyPassword(
   return computed === passwordHash;
 }
 
+function booleanFlag(value: unknown): number {
+  return value ? 1 : 0;
+}
+
 function sanitizedDisplayName(userId: string, displayName: string | null): string {
   const trimmed = displayName?.trim();
   return trimmed || userId;
+}
+
+function sanitizeSessionUser(user: Pick<UserRow, "user_id" | "display_name" | "dashboard_access" | "is_admin">): AuthUser {
+  return {
+    userId: user.user_id,
+    displayName: sanitizedDisplayName(user.user_id, user.display_name),
+    dashboardAccess: Number(user.dashboard_access) === 1,
+    isAdmin: Number(user.is_admin) === 1,
+  };
+}
+
+function sanitizeAdminUser(
+  user: Pick<UserRow, "user_id" | "display_name" | "dashboard_access" | "is_admin" | "is_active" | "created_at" | "updated_at">,
+) {
+  return {
+    userId: user.user_id,
+    displayName: user.display_name,
+    dashboardAccess: Number(user.dashboard_access) === 1,
+    isAdmin: Number(user.is_admin) === 1,
+    isActive: Number(user.is_active) === 1,
+    createdAt: Number(user.created_at),
+    updatedAt: Number(user.updated_at),
+  };
 }
 
 function unauthorized(c: AppContext) {
@@ -160,6 +229,17 @@ async function ensureDb(c: AppContext) {
   await db.prepare(SESSIONS_USER_INDEX_SQL).run();
   await db.prepare(SESSIONS_EXPIRES_INDEX_SQL).run();
 
+  const columns = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
+  const columnNames = new Set((columns.results ?? []).map((row) => String(row.name)));
+
+  if (!columnNames.has("dashboard_access")) {
+    await db.prepare("ALTER TABLE users ADD COLUMN dashboard_access INTEGER NOT NULL DEFAULT 0").run();
+  }
+
+  if (!columnNames.has("is_admin")) {
+    await db.prepare("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0").run();
+  }
+
   return db;
 }
 
@@ -169,6 +249,19 @@ function authUserIdOr401(c: AppContext): string | Response {
     return unauthorized(c);
   }
   return authUser.userId;
+}
+
+function adminUserOr403(c: AppContext): AuthUser | Response {
+  const authUser = c.get("authUser");
+  if (!authUser) {
+    return unauthorized(c);
+  }
+
+  if (!authUser.isAdmin) {
+    return c.json({ ok: false, error: "Forbidden" }, 403);
+  }
+
+  return authUser;
 }
 
 app.use("/api/*", async (c, next) => {
@@ -197,7 +290,7 @@ app.use("/api/*", async (c, next) => {
 
   const session = await db
     .prepare(
-      "SELECT s.user_id, s.expires_at, u.display_name, u.is_active FROM sessions s JOIN users u ON u.user_id = s.user_id WHERE s.token_hash = ?",
+      "SELECT s.user_id, s.expires_at, u.display_name, u.is_active, u.dashboard_access, u.is_admin FROM sessions s JOIN users u ON u.user_id = s.user_id WHERE s.token_hash = ?",
     )
     .bind(tokenHash)
     .first<{
@@ -205,6 +298,8 @@ app.use("/api/*", async (c, next) => {
       expires_at: number;
       display_name: string | null;
       is_active: number;
+      dashboard_access: number;
+      is_admin: number;
     }>();
 
   if (!session || Number(session.is_active) !== 1 || session.expires_at <= nowTs) {
@@ -213,10 +308,7 @@ app.use("/api/*", async (c, next) => {
 
   await db.prepare("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?").bind(nowTs, tokenHash).run();
 
-  c.set("authUser", {
-    userId: session.user_id,
-    displayName: sanitizedDisplayName(session.user_id, session.display_name),
-  });
+  c.set("authUser", sanitizeSessionUser(session));
   c.set("tokenHash", tokenHash);
 
   await next();
@@ -242,17 +334,10 @@ app.post("/api/auth/login", async (c) => {
 
   const user = await db
     .prepare(
-      "SELECT user_id, display_name, password_hash, password_salt, password_iterations, is_active FROM users WHERE user_id = ?",
+      "SELECT user_id, display_name, password_hash, password_salt, password_iterations, is_active, dashboard_access, is_admin, created_at, updated_at FROM users WHERE user_id = ?",
     )
     .bind(username)
-    .first<{
-      user_id: string;
-      display_name: string | null;
-      password_hash: string;
-      password_salt: string;
-      password_iterations: number;
-      is_active: number;
-    }>();
+    .first<UserRow>();
 
   if (!user || Number(user.is_active) !== 1) {
     return unauthorized(c);
@@ -300,10 +385,7 @@ app.post("/api/auth/login", async (c) => {
     ok: true,
     token: rawToken,
     expiresAt,
-    user: {
-      userId: user.user_id,
-      displayName: sanitizedDisplayName(user.user_id, user.display_name),
-    },
+    user: sanitizeSessionUser(user),
   });
 });
 
@@ -328,6 +410,218 @@ app.post("/api/auth/logout", async (c) => {
     await db.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(tokenHash).run();
   }
 
+  return c.json({ ok: true });
+});
+
+app.get("/api/admin/users", async (c) => {
+  const dbOrResponse = await ensureDb(c);
+  if (dbOrResponse instanceof Response) {
+    return dbOrResponse;
+  }
+
+  const adminOrResponse = adminUserOr403(c);
+  if (adminOrResponse instanceof Response) {
+    return adminOrResponse;
+  }
+
+  const rows = await dbOrResponse
+    .prepare(
+      "SELECT user_id, display_name, dashboard_access, is_admin, is_active, created_at, updated_at FROM users ORDER BY updated_at DESC, user_id ASC",
+    )
+    .all<UserRow>();
+
+  return c.json({
+    ok: true,
+    users: (rows.results ?? []).map((row) => sanitizeAdminUser(row)),
+  });
+});
+
+app.post("/api/admin/users", async (c) => {
+  const dbOrResponse = await ensureDb(c);
+  if (dbOrResponse instanceof Response) {
+    return dbOrResponse;
+  }
+
+  const adminOrResponse = adminUserOr403(c);
+  if (adminOrResponse instanceof Response) {
+    return adminOrResponse;
+  }
+
+  const body = await c.req
+    .json<{
+      userId?: string;
+      displayName?: string;
+      password?: string;
+      dashboardAccess?: boolean;
+      isAdmin?: boolean;
+      isActive?: boolean;
+    }>()
+    .catch(() => ({}));
+
+  const userId = normalizeUserId(body.userId);
+  const password = normalizePassword(body.password);
+
+  if (!userId || !password) {
+    return c.json({ ok: false, error: "Valid userId and password are required" }, 400);
+  }
+
+  const existing = await dbOrResponse
+    .prepare("SELECT user_id FROM users WHERE user_id = ?")
+    .bind(userId)
+    .first<{ user_id: string }>();
+  if (existing) {
+    return c.json({ ok: false, error: "User already exists" }, 409);
+  }
+
+  const nowTs = Date.now();
+  const salt = randomHex(16);
+  const passwordHash = await pbkdf2Sha256Hex(password, salt, PBKDF2_DEFAULT_ITERATIONS);
+  const isAdmin = booleanFlag(body.isAdmin);
+  const dashboardAccess = isAdmin === 1 ? 1 : booleanFlag(body.dashboardAccess);
+
+  await dbOrResponse
+    .prepare(
+      "INSERT INTO users (user_id, display_name, auth_provider, password_hash, password_salt, password_iterations, is_active, dashboard_access, is_admin, created_at, updated_at) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(
+      userId,
+      normalizeOptionalDisplayName(body.displayName),
+      passwordHash,
+      salt,
+      PBKDF2_DEFAULT_ITERATIONS,
+      booleanFlag(body.isActive ?? true),
+      dashboardAccess,
+      isAdmin,
+      nowTs,
+      nowTs,
+    )
+    .run();
+
+  const created = await dbOrResponse
+    .prepare(
+      "SELECT user_id, display_name, dashboard_access, is_admin, is_active, created_at, updated_at FROM users WHERE user_id = ?",
+    )
+    .bind(userId)
+    .first<UserRow>();
+
+  return c.json({ ok: true, user: created ? sanitizeAdminUser(created) : null });
+});
+
+app.put("/api/admin/users/:userId", async (c) => {
+  const dbOrResponse = await ensureDb(c);
+  if (dbOrResponse instanceof Response) {
+    return dbOrResponse;
+  }
+
+  const adminOrResponse = adminUserOr403(c);
+  if (adminOrResponse instanceof Response) {
+    return adminOrResponse;
+  }
+
+  const targetUserId = normalizeUserId(c.req.param("userId"));
+  if (!targetUserId) {
+    return c.json({ ok: false, error: "Invalid userId" }, 400);
+  }
+
+  const body = await c.req
+    .json<{
+      displayName?: string;
+      password?: string;
+      dashboardAccess?: boolean;
+      isAdmin?: boolean;
+      isActive?: boolean;
+    }>()
+    .catch(() => ({}));
+
+  const existing = await dbOrResponse
+    .prepare(
+      "SELECT user_id, display_name, password_hash, password_salt, password_iterations, is_active, dashboard_access, is_admin, created_at, updated_at FROM users WHERE user_id = ?",
+    )
+    .bind(targetUserId)
+    .first<UserRow>();
+  if (!existing) {
+    return c.json({ ok: false, error: "User not found" }, 404);
+  }
+
+  const nextDisplayName =
+    typeof body.displayName === "string" ? normalizeOptionalDisplayName(body.displayName) : existing.display_name;
+  const nextIsAdmin = typeof body.isAdmin === "boolean" ? booleanFlag(body.isAdmin) : Number(existing.is_admin);
+  const requestedDashboardAccess =
+    typeof body.dashboardAccess === "boolean" ? booleanFlag(body.dashboardAccess) : Number(existing.dashboard_access);
+  const nextDashboardAccess = nextIsAdmin === 1 ? 1 : requestedDashboardAccess;
+  const nextIsActive = typeof body.isActive === "boolean" ? booleanFlag(body.isActive) : Number(existing.is_active);
+  const nowTs = Date.now();
+
+  if (adminOrResponse.userId === targetUserId && nextIsAdmin !== 1) {
+    return c.json({ ok: false, error: "You cannot remove your own admin permission" }, 400);
+  }
+
+  if (adminOrResponse.userId === targetUserId && nextIsActive !== 1) {
+    return c.json({ ok: false, error: "You cannot disable your own account" }, 400);
+  }
+
+  let passwordHash = existing.password_hash;
+  let passwordSalt = existing.password_salt;
+  let passwordIterations = Number(existing.password_iterations) || PBKDF2_DEFAULT_ITERATIONS;
+
+  if (typeof body.password === "string" && body.password.trim()) {
+    const nextPassword = normalizePassword(body.password);
+    if (!nextPassword) {
+      return c.json({ ok: false, error: "Password must be 6-128 characters" }, 400);
+    }
+    passwordSalt = randomHex(16);
+    passwordHash = await pbkdf2Sha256Hex(nextPassword, passwordSalt, PBKDF2_DEFAULT_ITERATIONS);
+    passwordIterations = PBKDF2_DEFAULT_ITERATIONS;
+  }
+
+  await dbOrResponse
+    .prepare(
+      "UPDATE users SET display_name = ?, password_hash = ?, password_salt = ?, password_iterations = ?, is_active = ?, dashboard_access = ?, is_admin = ?, updated_at = ? WHERE user_id = ?",
+    )
+    .bind(
+      nextDisplayName,
+      passwordHash,
+      passwordSalt,
+      passwordIterations,
+      nextIsActive,
+      nextDashboardAccess,
+      nextIsAdmin,
+      nowTs,
+      targetUserId,
+    )
+    .run();
+
+  const updated = await dbOrResponse
+    .prepare(
+      "SELECT user_id, display_name, dashboard_access, is_admin, is_active, created_at, updated_at FROM users WHERE user_id = ?",
+    )
+    .bind(targetUserId)
+    .first<UserRow>();
+
+  return c.json({ ok: true, user: updated ? sanitizeAdminUser(updated) : null });
+});
+
+app.delete("/api/admin/users/:userId", async (c) => {
+  const dbOrResponse = await ensureDb(c);
+  if (dbOrResponse instanceof Response) {
+    return dbOrResponse;
+  }
+
+  const adminOrResponse = adminUserOr403(c);
+  if (adminOrResponse instanceof Response) {
+    return adminOrResponse;
+  }
+
+  const targetUserId = normalizeUserId(c.req.param("userId"));
+  if (!targetUserId) {
+    return c.json({ ok: false, error: "Invalid userId" }, 400);
+  }
+
+  if (adminOrResponse.userId === targetUserId) {
+    return c.json({ ok: false, error: "You cannot delete your own account" }, 400);
+  }
+
+  await dbOrResponse.prepare("DELETE FROM users WHERE user_id = ?").bind(targetUserId).run();
   return c.json({ ok: true });
 });
 

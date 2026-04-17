@@ -70,6 +70,13 @@ Auth API endpoints:
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
 
+Admin API endpoints:
+
+- `GET /api/admin/users`
+- `POST /api/admin/users`
+- `PUT /api/admin/users/:userId`
+- `DELETE /api/admin/users/:userId`
+
 ### Authentication Model
 
 The app now uses classic login + session token auth:
@@ -78,8 +85,18 @@ The app now uses classic login + session token auth:
 - Server returns a bearer token.
 - Frontend stores token locally and sends `Authorization: Bearer <token>` for `/api/*` requests.
 - Session validity is tracked in the `sessions` table.
+- Session user payload now includes `dashboardAccess` and `isAdmin`.
 
 No Basic Auth environment variables are required anymore.
+
+### Permissions
+
+Each user now has two backend-managed permission flags:
+
+- `dashboard_access`: allows entering the desktop dashboard from Settings.
+- `is_admin`: allows entering backend management from Dashboard and calling `/api/admin/*`.
+
+Existing databases are upgraded automatically on Worker start. Fresh databases should use the updated `schema.sql`.
 
 ### User Management (Manual)
 
@@ -115,6 +132,8 @@ INSERT INTO users (
 	password_salt,
 	password_iterations,
 	is_active,
+	dashboard_access,
+	is_admin,
 	created_at,
 	updated_at
 ) VALUES (
@@ -124,6 +143,8 @@ INSERT INTO users (
 	'<hash>',
 	'<salt>',
 	100000,
+	1,
+	1,
 	1,
 	CAST(strftime('%s','now') AS INTEGER) * 1000,
 	CAST(strftime('%s','now') AS INTEGER) * 1000
@@ -170,7 +191,7 @@ DELETE FROM users WHERE user_id = 'kaku';
 #### 6. Useful queries
 
 ```sql
-SELECT user_id, display_name, is_active, created_at, updated_at
+SELECT user_id, display_name, is_active, dashboard_access, is_admin, created_at, updated_at
 FROM users
 ORDER BY updated_at DESC;
 ```

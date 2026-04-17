@@ -4,8 +4,10 @@ import { TrackList } from './components/TrackList';
 import { RecordTrack } from './components/RecordTrack';
 import { RaceMode } from './components/RaceMode';
 import { TrackDetails } from './components/TrackDetails';
+import { AdminPanel } from './components/AdminPanel';
+import { DashboardView } from './components/DashboardView';
 import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
-import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X } from 'lucide-react';
+import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X, LogOut } from 'lucide-react';
 import { createCloudSync, SyncStatus } from './sync/cloudSync';
 import { AuthError, getCurrentUser, login, logout, SessionUser } from './sync/auth';
 import { Locale, useI18n } from './i18n';
@@ -13,6 +15,7 @@ import { Locale, useI18n } from './i18n';
 const WAKE_LOCK_STORAGE_KEY = 'apex_keep_screen_awake';
 type WakeLockErrorKey = 'unsupported' | 'failed';
 type LoginErrorKey = 'missingCredentials' | 'invalidCredentials' | 'loginFailed';
+type AppView = 'home' | 'record' | 'race' | 'details' | 'dashboard' | 'admin';
 
 type WakeLockNavigator = Navigator & {
     wakeLock?: {
@@ -80,7 +83,7 @@ function DevTools() {
 
 export default function App() {
     const { locale, setLocale, t } = useI18n();
-    const [view, setView] = useState<'home' | 'record' | 'race' | 'details'>('home');
+    const [view, setView] = useState<AppView>('home');
     const [tracks, setTracks] = useState<Track[]>([]);
     const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
     const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -211,6 +214,12 @@ export default function App() {
             }
         };
     }, [authUser]);
+
+    useEffect(() => {
+        if (authUser && !authUser.dashboardAccess && (view === 'dashboard' || view === 'admin')) {
+            setView('home');
+        }
+    }, [authUser, view]);
 
     useEffect(() => {
         if (hideSyncTimeoutRef.current !== null) {
@@ -425,6 +434,26 @@ export default function App() {
         });
     };
 
+    const handleEnterDashboard = () => {
+        if (!authUser?.dashboardAccess) {
+            return;
+        }
+        setIsSettingsOpen(false);
+        setView('dashboard');
+        setSelectedTrack(null);
+    };
+
+    const handleBackToMobile = () => {
+        setView('home');
+    };
+
+    const handleOpenAdmin = () => {
+        if (!authUser?.isAdmin) {
+            return;
+        }
+        setView('admin');
+    };
+
     const gpsRateSupported = isGPSRefreshRateSupported();
 
     const handleLogin = async (e: FormEvent) => {
@@ -454,6 +483,7 @@ export default function App() {
         setSelectedTrack(null);
         setLoginPassword('');
         setLoginError(null);
+        setIsSettingsOpen(false);
     };
 
     const loginErrorText =
@@ -528,6 +558,7 @@ export default function App() {
                 ) : null}
                 <span className="text-[10px] text-white/50 compact-hide">{formatSyncTime(syncStatus.lastSyncAt)}</span>
             </div>
+
             {view === 'home' && (
                 <TrackList
                     tracks={tracks}
@@ -558,6 +589,24 @@ export default function App() {
                     onUpdateTrack={handleUpdateTrack}
                 />
             )}
+            {view === 'dashboard' && (
+                <DashboardView
+                    authUser={authUser}
+                    tracksCount={tracks.length}
+                    syncStatus={syncStatus}
+                    syncText={syncText}
+                    lastSyncText={formatSyncTime(syncStatus.lastSyncAt)}
+                    onBackToMobile={handleBackToMobile}
+                    onOpenAdmin={handleOpenAdmin}
+                />
+            )}
+            {view === 'admin' && (
+                <AdminPanel
+                    currentUserId={authUser.userId}
+                    onBack={() => setView('dashboard')}
+                />
+            )}
+
             {isSettingsOpen && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}>
                     <div
@@ -574,17 +623,51 @@ export default function App() {
                         </div>
 
                         <div className="space-y-5">
-                            <div className="apex-panel-muted rounded-2xl p-4 flex items-center justify-between">
-                                <div>
+                            <div className="apex-panel-muted rounded-2xl p-4 flex items-center justify-between gap-3">
+                                <div className="min-w-0">
                                     <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.signedIn')}</div>
-                                    <div className="text-xs text-white/90 mt-1">{authUser.displayName || authUser.userId}</div>
+                                    <div className="mt-1 min-w-0 truncate text-xs text-white/90">{authUser.displayName || authUser.userId}</div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.18em] ${authUser.dashboardAccess ? 'bg-accent-green/15 text-accent-green' : 'bg-white/8 text-white/45'}`}>
+                                            {t('app.settings.permissionDashboard')}
+                                        </span>
+                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.18em] ${authUser.isAdmin ? 'bg-cyan-400/15 text-cyan-300' : 'bg-white/8 text-white/45'}`}>
+                                            {t('app.settings.permissionAdmin')}
+                                        </span>
+                                    </div>
                                 </div>
                                 <button
                                     onClick={handleLogout}
-                                    className="px-3 py-2 rounded-xl bg-white/10 text-xs font-bold uppercase tracking-widest hover:bg-white/20 transition-colors"
+                                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors shrink-0"
+                                    aria-label={t('common.buttons.logout')}
+                                    title={t('common.buttons.logout')}
                                 >
-                                    {t('common.buttons.logout')}
+                                    <LogOut size={18} />
                                 </button>
+                            </div>
+
+                            <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.desktopMode')}</div>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={handleEnterDashboard}
+                                        disabled={!authUser.dashboardAccess}
+                                        className="flex-1 rounded-xl bg-accent-green px-4 py-3 text-sm font-bold text-black transition-colors hover:brightness-110 disabled:opacity-40"
+                                    >
+                                        {view === 'dashboard' || view === 'admin' ? t('app.settings.desktopModeCurrent') : t('app.settings.enterDesktop')}
+                                    </button>
+                                    {(view === 'dashboard' || view === 'admin') ? (
+                                        <button
+                                            onClick={() => {
+                                                setIsSettingsOpen(false);
+                                                handleBackToMobile();
+                                            }}
+                                            className="flex-1 rounded-xl bg-white/10 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/15"
+                                        >
+                                            {t('app.settings.backToMobile')}
+                                        </button>
+                                    ) : null}
+                                </div>
                             </div>
 
                             <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
@@ -602,16 +685,10 @@ export default function App() {
                                     onChange={(e) => handleSetGpsHz(Number(e.target.value))}
                                     className="w-full accent-[--accent-green] disabled:opacity-40"
                                 />
-                                <p className="text-[10px] text-text-secondary">
-                                    {gpsRateSupported ? t('app.settings.locationRefreshRateSupported') : t('app.settings.locationRefreshRateUnsupported')}
-                                </p>
                             </div>
 
                             <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
-                                <div>
-                                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.language')}</div>
-                                    <div className="text-xs text-white/80 mt-1">{t('app.settings.languageHelp')}</div>
-                                </div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.language')}</div>
                                 <div className="grid grid-cols-2 gap-2">
                                     {(['en', 'zh-CN'] as Locale[]).map((language) => (
                                         <button
@@ -632,7 +709,6 @@ export default function App() {
                             <div className="apex-panel-muted rounded-2xl p-4 flex items-center justify-between">
                                 <div>
                                     <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.debugTools')}</div>
-                                    <div className="text-xs text-white/80 mt-1">{t('app.settings.debugToolsDescription')}</div>
                                 </div>
                                 <button
                                     onClick={handleDebugToggle}
@@ -647,7 +723,6 @@ export default function App() {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.keepScreenAwake')}</div>
-                                        <div className="text-xs text-white/80 mt-1">{t('app.settings.keepScreenAwakeDescription')}</div>
                                     </div>
                                     <button
                                         onClick={handleWakeLockToggle}
@@ -670,6 +745,7 @@ export default function App() {
                     </div>
                 </div>
             )}
+
             {pendingDeleteTrack && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPendingDeleteTrack(null)}>
                     <div className="apex-panel w-full max-w-sm max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
@@ -693,6 +769,7 @@ export default function App() {
                     </div>
                 </div>
             )}
+
             {debugEnabled ? <DevTools /> : null}
         </div>
     );

@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_salt TEXT NOT NULL,
   password_iterations INTEGER NOT NULL DEFAULT 100000,
   is_active INTEGER NOT NULL DEFAULT 1,
+  dashboard_access INTEGER NOT NULL DEFAULT 0,
+  is_admin INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );

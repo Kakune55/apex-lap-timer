@@ -3,6 +3,27 @@ import { clearAuthToken, getAuthToken, setAuthToken } from "./cloudSync";
 export type SessionUser = {
   userId: string;
   displayName: string | null;
+  dashboardAccess: boolean;
+  isAdmin: boolean;
+};
+
+export type AdminUserRecord = {
+  userId: string;
+  displayName: string | null;
+  dashboardAccess: boolean;
+  isAdmin: boolean;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type AdminUserUpsertInput = {
+  userId: string;
+  displayName: string;
+  password?: string;
+  dashboardAccess: boolean;
+  isAdmin: boolean;
+  isActive: boolean;
 };
 
 export type AuthErrorCode = "invalid_credentials" | "login_failed";
@@ -81,4 +102,89 @@ export async function logout() {
     }).catch(() => undefined);
   }
   clearAuthToken();
+}
+
+function getRequiredAuthToken(): string {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("not authenticated");
+  }
+  return token;
+}
+
+export async function listAdminUsers(): Promise<AdminUserRecord[]> {
+  const token = getRequiredAuthToken();
+  const response = await fetch("/api/admin/users", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`list users failed: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as {
+    users: AdminUserRecord[];
+  };
+
+  return payload.users;
+}
+
+export async function createAdminUser(input: AdminUserUpsertInput): Promise<AdminUserRecord> {
+  const token = getRequiredAuthToken();
+  const response = await fetch("/api/admin/users", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    throw new Error(`create user failed: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as {
+    user: AdminUserRecord;
+  };
+
+  return payload.user;
+}
+
+export async function updateAdminUser(userId: string, input: Omit<AdminUserUpsertInput, "userId">): Promise<AdminUserRecord> {
+  const token = getRequiredAuthToken();
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    throw new Error(`update user failed: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as {
+    user: AdminUserRecord;
+  };
+
+  return payload.user;
+}
+
+export async function deleteAdminUser(userId: string) {
+  const token = getRequiredAuthToken();
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`delete user failed: ${response.status}`);
+  }
 }

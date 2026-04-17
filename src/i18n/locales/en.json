@@ -73,16 +73,17 @@
     "settings": {
       "title": "Settings",
       "signedIn": "Signed in",
+      "permissionDashboard": "Dashboard Access",
+      "permissionAdmin": "Admin Access",
+      "desktopMode": "Dashboard",
+      "enterDesktop": "Enter Dashboard",
+      "desktopModeCurrent": "Dashboard Active",
+      "backToMobile": "Back to Mobile",
       "locationRefreshRate": "Location Refresh Rate",
-      "locationRefreshRateSupported": "Applied immediately. Real GPS rate may still be capped by device/browser (often around 1Hz).",
-      "locationRefreshRateUnsupported": "Not supported on this device/browser.",
       "language": "Language",
-      "languageHelp": "Used across the whole app and saved on this device.",
       "debugTools": "Debug Tools",
-      "debugToolsDescription": "Show simulator and diagnostics panel",
       "toggleDebugTools": "Toggle debug tools",
       "keepScreenAwake": "Keep Screen Awake",
-      "keepScreenAwakeDescription": "Prevent display sleep while app is open",
       "toggleKeepScreenAwake": "Toggle keep screen awake",
       "wakeLock": {
         "active": "Active: display sleep is currently blocked.",
@@ -95,6 +96,125 @@
     "deleteTrack": {
       "title": "Confirm Delete",
       "description": "This track and its lap history will be removed."
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "account": "Current Account",
+    "sync": "Sync Status",
+    "lastSync": "Last sync: {{time}}",
+    "pendingTasks": "{{count}} pending sync tasks",
+    "backToMobile": "Back to Mobile",
+    "openAdmin": "Open Admin",
+    "workspaceTitle": "Professional Workspace",
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "permissions": {
+      "dashboard": "Dashboard",
+      "admin": "Admin"
+    },
+    "sections": {
+      "overview": "Overview",
+      "admin": "Admin"
+    },
+    "cards": {
+      "trackCount": "Synced Tracks",
+      "trackCountHint": "Current local and cloud track count for this account.",
+      "syncStatus": "Cloud Sync",
+      "adminAccess": "Admin Access",
+      "adminAccessHint": "Admin permission unlocks the management backend."
+    },
+    "portrait": {
+      "title": "Wide Screen Required",
+      "heading": "Use Dashboard on a wide-screen device",
+      "description": "Dashboard is positioned as a professional information surface and is not optimized for portrait layouts. Switch to landscape or desktop to continue."
+    },
+    "placeholders": {
+      "liveFeed": {
+        "title": "Live Feed",
+        "description": "Reserved for real-time vehicle status, active sessions, and track operations."
+      },
+      "analytics": {
+        "title": "Analytics",
+        "description": "Future modules can extend this area with pace trends, speed distribution, and driver comparisons."
+      },
+      "professional": {
+        "title": "Professional Display Scope",
+        "description": "Dashboard will carry denser modules and management entry points. For now it provides a consistent professional shell ready for future expansion."
+      },
+      "modules": {
+        "title": "Planned Modules",
+        "items": {
+          "pitWall": {
+            "title": "Pit Wall",
+            "description": "Reserved for session windows, car status, and stint summaries."
+          },
+          "events": {
+            "title": "Event Feed",
+            "description": "Reserved for driver events, system alerts, and operation logs."
+          },
+          "exports": {
+            "title": "Data Export",
+            "description": "Reserved for report export, session replay, and downstream delivery."
+          }
+        }
+      },
+      "guidance": {
+        "title": "Guidance",
+        "description": "Accounts with admin permission can enter the backend from the left rail or the main workspace action. Other modules stay as placeholders for now."
+      }
+    }
+  },
+  "admin": {
+    "title": "Admin",
+    "subtitle": "User Management",
+    "actions": {
+      "refresh": "Refresh",
+      "back": "Back to Dashboard",
+      "newUser": "New User",
+      "saving": "Saving...",
+      "create": "Create User",
+      "update": "Update User",
+      "reset": "Reset",
+      "delete": "Delete User"
+    },
+    "permissions": {
+      "dashboard": "Dashboard",
+      "admin": "Admin"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled"
+    },
+    "fields": {
+      "userId": "Account",
+      "displayName": "Display Name",
+      "password": "Password",
+      "passwordOptional": "Password (leave blank to keep current)"
+    },
+    "userList": {
+      "title": "Users",
+      "updatedAt": "Updated: {{time}}"
+    },
+    "editor": {
+      "createTitle": "Create User",
+      "editTitle": "Edit User",
+      "createdAt": "Created: {{time}}",
+      "updatedAt": "Updated: {{time}}",
+      "selfGuard": "Your current account cannot delete itself or remove its own admin access."
+    },
+    "messages": {
+      "loading": "Loading users...",
+      "empty": "No users found.",
+      "created": "User created.",
+      "updated": "User updated.",
+      "deleted": "User deleted.",
+      "loadFailed": "Failed to load users",
+      "saveFailed": "Failed to save user",
+      "deleteFailed": "Failed to delete user",
+      "confirmDelete": "Delete account {{userId}}?"
     }
   },
   "trackList": {
