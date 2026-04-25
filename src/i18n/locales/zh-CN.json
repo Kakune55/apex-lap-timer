@@ -101,6 +101,13 @@
     "deleteTrack": {
       "title": "确认删除",
       "description": "该赛道及其圈速历史将被移除。"
+    },
+    "syncConflict": {
+      "title": "云同步冲突",
+      "description": "本地和云端的赛道内容不一致，请选择保留哪一份。",
+      "keepLocal": "保留本地并覆盖云端",
+      "useCloud": "使用云端版本",
+      "acceptDelete": "接受云端删除"
     }
   },
   "dashboard": {

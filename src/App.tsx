@@ -3,7 +3,7 @@ import { Track } from './types';
 import { TrackList } from './components/TrackList';
 import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
 import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X, LogOut, Download } from 'lucide-react';
-import { createCloudSync, SyncStatus } from './sync/cloudSync';
+import { createCloudSync, SyncConflict, SyncConflictChoice, SyncStatus } from './sync/cloudSync';
 import { AuthError, getCurrentUser, login, logout, SessionUser } from './sync/auth';
 import { Locale, useI18n } from './i18n';
 import { parseTrackShareInput } from './utils/trackShare';
@@ -166,6 +166,8 @@ export default function App() {
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [importBusy, setImportBusy] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
+    const [pendingSyncConflict, setPendingSyncConflict] = useState<SyncConflict | null>(null);
+    const syncConflictResolverRef = useRef<((choice: SyncConflictChoice) => void) | null>(null);
 
     const normalizeTracks = useCallback((incoming: Track[]) => {
         const now = Date.now();
@@ -181,6 +183,19 @@ export default function App() {
         setTracks(normalized);
         localStorage.setItem('apex_tracks', JSON.stringify(normalized));
     }, [normalizeTracks]);
+
+    const handleSyncConflict = useCallback((conflict: SyncConflict) => {
+        return new Promise<SyncConflictChoice>((resolve) => {
+            syncConflictResolverRef.current = resolve;
+            setPendingSyncConflict(conflict);
+        });
+    }, []);
+
+    const resolveSyncConflict = (choice: SyncConflictChoice) => {
+        syncConflictResolverRef.current?.(choice);
+        syncConflictResolverRef.current = null;
+        setPendingSyncConflict(null);
+    };
 
     const routeTrackId =
         route.name === 'track-details' || route.name === 'track-race'
@@ -234,6 +249,9 @@ export default function App() {
                 syncRef.current.stop();
                 syncRef.current = null;
             }
+            syncConflictResolverRef.current?.('skip');
+            syncConflictResolverRef.current = null;
+            setPendingSyncConflict(null);
             setSyncStatus({
                 state: 'idle',
                 pending: 0,
@@ -251,6 +269,7 @@ export default function App() {
             setStatus: (status) => {
                 setSyncStatus(status);
             },
+            onConflict: handleSyncConflict,
         });
         syncRef.current = syncManager;
         syncManager.start();
@@ -258,12 +277,14 @@ export default function App() {
         return () => {
             syncManager.stop();
             syncRef.current = null;
+            syncConflictResolverRef.current?.('skip');
+            syncConflictResolverRef.current = null;
             if (hideSyncTimeoutRef.current !== null) {
                 clearTimeout(hideSyncTimeoutRef.current);
                 hideSyncTimeoutRef.current = null;
             }
         };
-    }, [authUser, persistTracks]);
+    }, [authUser, handleSyncConflict, persistTracks]);
 
     useEffect(() => {
         if (!tracksReady || !routeTrackId) {
@@ -899,6 +920,38 @@ export default function App() {
                                 className="flex-1 py-2.5 rounded-xl font-bold bg-accent-red/90 text-white hover:bg-accent-red transition-colors"
                             >
                                 {t('common.buttons.delete')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {pendingSyncConflict && (
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+                    <div className="apex-panel w-full max-w-sm max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto rounded-3xl p-6">
+                        <div className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-2">{t('app.syncConflict.title')}</div>
+                        <div className="text-lg font-semibold mb-1 truncate">
+                            {pendingSyncConflict.localTrack?.name || pendingSyncConflict.remoteTrack?.name || pendingSyncConflict.trackId}
+                        </div>
+                        <p className="text-sm text-text-secondary mb-5">{t('app.syncConflict.description')}</p>
+                        <div className="grid grid-cols-1 gap-3">
+                            <button
+                                onClick={() => resolveSyncConflict('local')}
+                                className="w-full rounded-xl bg-accent-green px-4 py-3 text-sm font-bold text-black transition-colors hover:brightness-110"
+                            >
+                                {t('app.syncConflict.keepLocal')}
+                            </button>
+                            <button
+                                onClick={() => resolveSyncConflict('remote')}
+                                className="w-full rounded-xl bg-white/10 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/15"
+                            >
+                                {pendingSyncConflict.remoteDeleted ? t('app.syncConflict.acceptDelete') : t('app.syncConflict.useCloud')}
+                            </button>
+                            <button
+                                onClick={() => resolveSyncConflict('skip')}
+                                className="w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-text-secondary transition-colors hover:bg-white/5"
+                            >
+                                {t('common.buttons.skip')}
                             </button>
                         </div>
                     </div>

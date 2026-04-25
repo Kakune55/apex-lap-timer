@@ -42,7 +42,7 @@ const app = new Hono<{ Bindings: AppBindings; Variables: AppVars }>();
 const USERS_TABLE_SQL =
   "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, display_name TEXT, auth_provider TEXT NOT NULL DEFAULT 'local', password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL DEFAULT 100000, is_active INTEGER NOT NULL DEFAULT 1, dashboard_access INTEGER NOT NULL DEFAULT 0, is_admin INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)";
 const TRACKS_TABLE_SQL =
-  "CREATE TABLE IF NOT EXISTS tracks (user_id TEXT NOT NULL, track_id TEXT NOT NULL, data TEXT, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, track_id), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)";
+  "CREATE TABLE IF NOT EXISTS tracks (user_id TEXT NOT NULL, track_id TEXT NOT NULL, data BLOB, data_hash TEXT, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, track_id), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)";
 const SESSIONS_TABLE_SQL =
   "CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)";
 const USERS_UPDATED_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at)";
@@ -55,6 +55,7 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const SESSION_SLIDING_TTL_MS = SESSION_TTL_MS;
 const PBKDF2_DEFAULT_ITERATIONS = 100000;
 const PBKDF2_MAX_ITERATIONS = 100000;
+const LEGACY_TRACK_DATA_GZIP_PREFIX = "gzip:";
 
 type AppContext = Context<{ Bindings: AppBindings; Variables: AppVars }>;
 
@@ -134,6 +135,19 @@ function base64FromBytes(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+function base64UrlToBytes(input: string): Uint8Array {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
 function randomToken(byteLength: number): string {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   return base64FromBytes(bytes);
@@ -162,6 +176,91 @@ async function pbkdf2Sha256Hex(password: string, salt: string, iterations: numbe
     256,
   );
   return bytesToHex(new Uint8Array(derivedBits));
+}
+
+async function gzipBytes(bytes: Uint8Array): Promise<Uint8Array | null> {
+  if (typeof CompressionStream === "undefined") {
+    return null;
+  }
+
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function gunzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("Track data decompression is not supported in this runtime");
+  }
+
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function encodeTrackData(track: unknown): Promise<ArrayBuffer> {
+  const json = JSON.stringify(track ?? null);
+  const rawBytes = new TextEncoder().encode(json);
+  const compressed = await gzipBytes(rawBytes);
+  return toArrayBuffer(compressed ?? rawBytes);
+}
+
+function stableJson(value: unknown): string {
+  if (typeof value === "undefined") {
+    return "null";
+  }
+
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record)
+    .filter((key) => key !== "updatedAt" && typeof record[key] !== "undefined")
+    .sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(",")}}`;
+}
+
+async function hashTrackData(track: unknown): Promise<string> {
+  return sha256Hex(stableJson(track ?? null));
+}
+
+async function decodeTrackData(data: unknown): Promise<unknown> {
+  if (!data) {
+    return null;
+  }
+
+  if (typeof data === "string") {
+    if (data.startsWith(LEGACY_TRACK_DATA_GZIP_PREFIX)) {
+      const compressed = base64UrlToBytes(data.slice(LEGACY_TRACK_DATA_GZIP_PREFIX.length));
+      const rawBytes = await gunzipBytes(compressed);
+      return JSON.parse(new TextDecoder().decode(rawBytes));
+    }
+
+    return JSON.parse(data);
+  }
+
+  const storedBytes =
+    data instanceof Uint8Array
+      ? data
+      : data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : ArrayBuffer.isView(data)
+          ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+          : null;
+
+  if (!storedBytes) {
+    return null;
+  }
+
+  try {
+    const rawBytes = await gunzipBytes(storedBytes);
+    return JSON.parse(new TextDecoder().decode(rawBytes));
+  } catch {
+    return JSON.parse(new TextDecoder().decode(storedBytes));
+  }
 }
 
 async function verifyPassword(
@@ -210,6 +309,83 @@ function unauthorized(c: AppContext) {
   return c.json({ ok: false, error: "Unauthorized" }, 401);
 }
 
+async function ensureTracksTable(db: D1Database) {
+  const columns = await db.prepare("PRAGMA table_info(tracks)").all<{ name: string; type: string }>();
+  const rows = columns.results ?? [];
+  const dataColumn = rows.find((row) => String(row.name) === "data");
+  const hashColumn = rows.find((row) => String(row.name) === "data_hash");
+
+  if (rows.length === 0) {
+    await db.prepare(TRACKS_TABLE_SQL).run();
+    return;
+  }
+
+  if (String(dataColumn?.type ?? "").toUpperCase() === "BLOB") {
+    if (!hashColumn) {
+      await db.prepare("ALTER TABLE tracks ADD COLUMN data_hash TEXT").run();
+      const existingRows = await db
+        .prepare("SELECT user_id, track_id, data, deleted FROM tracks WHERE deleted = 0 AND data IS NOT NULL")
+        .all<Record<string, unknown>>();
+
+      for (const row of existingRows.results ?? []) {
+        try {
+          const hash = await hashTrackData(await decodeTrackData(row.data));
+          await db
+            .prepare("UPDATE tracks SET data_hash = ? WHERE user_id = ? AND track_id = ?")
+            .bind(hash, String(row.user_id), String(row.track_id))
+            .run();
+        } catch {
+          await db
+            .prepare("UPDATE tracks SET data_hash = NULL WHERE user_id = ? AND track_id = ?")
+            .bind(String(row.user_id), String(row.track_id))
+            .run();
+        }
+      }
+    }
+    return;
+  }
+
+  await db.prepare("DROP INDEX IF EXISTS idx_tracks_user_updated_at").run();
+  await db.prepare("DROP TABLE IF EXISTS tracks_legacy_migration").run();
+  await db.prepare("ALTER TABLE tracks RENAME TO tracks_legacy_migration").run();
+  await db.prepare(TRACKS_TABLE_SQL).run();
+
+  const legacyRows = await db
+    .prepare("SELECT user_id, track_id, data, updated_at, deleted FROM tracks_legacy_migration")
+    .all<Record<string, unknown>>();
+  const insert = db.prepare(
+    "INSERT INTO tracks (user_id, track_id, data, data_hash, updated_at, deleted) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+
+  for (const row of legacyRows.results ?? []) {
+    const deleted = Number(row.deleted ?? 0) === 1;
+
+    try {
+      const decodedTrackData = deleted ? null : await decodeTrackData(row.data);
+      const encodedTrackData = deleted ? null : await encodeTrackData(decodedTrackData);
+      const trackHash = deleted ? null : await hashTrackData(decodedTrackData);
+      await insert
+        .bind(
+          String(row.user_id),
+          String(row.track_id),
+          encodedTrackData,
+          trackHash,
+          Number(row.updated_at),
+          deleted ? 1 : 0,
+        )
+        .run();
+    } catch {
+      if (deleted) {
+        await insert
+          .bind(String(row.user_id), String(row.track_id), null, null, Number(row.updated_at), 1)
+          .run();
+      }
+    }
+  }
+
+  await db.prepare("DROP TABLE tracks_legacy_migration").run();
+}
+
 async function ensureDb(c: AppContext) {
   const db = c.env.DB;
   if (!db) {
@@ -223,8 +399,8 @@ async function ensureDb(c: AppContext) {
   }
 
   await db.prepare(USERS_TABLE_SQL).run();
-  await db.prepare(TRACKS_TABLE_SQL).run();
   await db.prepare(SESSIONS_TABLE_SQL).run();
+  await ensureTracksTable(db);
   await db.prepare(USERS_UPDATED_INDEX_SQL).run();
   await db.prepare(TRACKS_USER_UPDATED_INDEX_SQL).run();
   await db.prepare(SESSIONS_USER_INDEX_SQL).run();
@@ -648,26 +824,27 @@ app.get("/api/tracks", async (c) => {
   const result = Number.isFinite(since) && since > 0
     ? await db
         .prepare(
-          "SELECT track_id, data, updated_at, deleted FROM tracks WHERE user_id = ? AND updated_at > ? ORDER BY updated_at ASC",
+          "SELECT track_id, data, data_hash, updated_at, deleted FROM tracks WHERE user_id = ? AND updated_at > ? ORDER BY updated_at ASC",
         )
         .bind(userId, since)
         .all()
     : await db
         .prepare(
-          "SELECT track_id, data, updated_at, deleted FROM tracks WHERE user_id = ? ORDER BY updated_at ASC",
+          "SELECT track_id, data, data_hash, updated_at, deleted FROM tracks WHERE user_id = ? ORDER BY updated_at ASC",
         )
         .bind(userId)
         .all();
 
-  const tracks = (result.results ?? []).map((row: Record<string, unknown>) => {
+  const tracks = await Promise.all((result.results ?? []).map(async (row: Record<string, unknown>) => {
     const deleted = Number(row.deleted ?? 0) === 1;
     return {
       id: String(row.track_id),
       updatedAt: Number(row.updated_at),
       deleted,
-      track: deleted ? null : row.data ? JSON.parse(String(row.data)) : null,
+      hash: typeof row.data_hash === "string" ? row.data_hash : null,
+      track: deleted ? null : await decodeTrackData(row.data),
     };
-  });
+  }));
 
   return c.json({
     ok: true,
@@ -719,7 +896,7 @@ app.post("/api/sync", async (c) => {
     if (op.type === "delete") {
       await db
         .prepare(
-          "INSERT INTO tracks (user_id, track_id, data, updated_at, deleted) VALUES (?, ?, NULL, ?, 1) ON CONFLICT(user_id, track_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, deleted = 1",
+          "INSERT INTO tracks (user_id, track_id, data, data_hash, updated_at, deleted) VALUES (?, ?, NULL, NULL, ?, 1) ON CONFLICT(user_id, track_id) DO UPDATE SET data = excluded.data, data_hash = excluded.data_hash, updated_at = excluded.updated_at, deleted = 1",
         )
         .bind(userId, op.trackId, op.updatedAt)
         .run();
@@ -727,11 +904,14 @@ app.post("/api/sync", async (c) => {
       continue;
     }
 
+    const encodedTrackData = await encodeTrackData(op.track);
+    const trackHash = await hashTrackData(op.track);
+
     await db
       .prepare(
-        "INSERT INTO tracks (user_id, track_id, data, updated_at, deleted) VALUES (?, ?, ?, ?, 0) ON CONFLICT(user_id, track_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, deleted = 0",
+        "INSERT INTO tracks (user_id, track_id, data, data_hash, updated_at, deleted) VALUES (?, ?, ?, ?, ?, 0) ON CONFLICT(user_id, track_id) DO UPDATE SET data = excluded.data, data_hash = excluded.data_hash, updated_at = excluded.updated_at, deleted = 0",
       )
-      .bind(userId, op.trackId, JSON.stringify(op.track ?? null), op.updatedAt)
+      .bind(userId, op.trackId, encodedTrackData, trackHash, op.updatedAt)
       .run();
     ackOperationIds.push(op.opId);
   }

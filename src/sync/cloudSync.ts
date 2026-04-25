@@ -15,6 +15,17 @@ export interface SyncStatus {
   error: string | null;
 }
 
+export type SyncConflictChoice = "local" | "remote" | "skip";
+
+export type SyncConflict = {
+  trackId: string;
+  localTrack: Track | null;
+  remoteTrack: Track | null;
+  localUpdatedAt: number;
+  remoteUpdatedAt: number;
+  remoteDeleted: boolean;
+};
+
 type OutboxItem = {
   opId: string;
   trackId: string;
@@ -29,6 +40,7 @@ type RemoteTrackRecord = {
   id: string;
   updatedAt: number;
   deleted: boolean;
+  hash?: string | null;
   track: Track | null;
 };
 
@@ -48,6 +60,42 @@ function normalizeTrack(track: Track): Track {
     ...track,
     updatedAt: track.updatedAt ?? now(),
   };
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function stableJson(value: unknown): string {
+  if (typeof value === "undefined") {
+    return "null";
+  }
+
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record)
+    .filter((key) => key !== "updatedAt" && typeof record[key] !== "undefined")
+    .sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(",")}}`;
+}
+
+async function hashTrack(track: Track | null): Promise<string | null> {
+  if (!track) {
+    return null;
+  }
+
+  const bytes = new TextEncoder().encode(stableJson(track));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return bytesToHex(new Uint8Array(digest));
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -110,8 +158,13 @@ export function getAuthToken(): string | null {
   return token && token.trim() ? token : null;
 }
 
-function mergeTracks(localTracks: Track[], remoteTracks: RemoteTrackRecord[]): Track[] {
+async function mergeTracks(
+  localTracks: Track[],
+  remoteTracks: RemoteTrackRecord[],
+  onConflict?: (conflict: SyncConflict) => Promise<SyncConflictChoice>,
+): Promise<{ tracks: Track[]; localWins: Track[] }> {
   const map = new Map<string, Track>();
+  const localWins: Track[] = [];
 
   for (const localTrack of localTracks) {
     const normalized = normalizeTrack(localTrack);
@@ -122,21 +175,64 @@ function mergeTracks(localTracks: Track[], remoteTracks: RemoteTrackRecord[]): T
     const local = map.get(row.id);
     const localUpdatedAt = local?.updatedAt ?? 0;
 
-    if (row.updatedAt < localUpdatedAt) {
-      continue;
-    }
-
     if (row.deleted) {
+      if (local && onConflict) {
+        const choice = await onConflict({
+          trackId: row.id,
+          localTrack: local,
+          remoteTrack: null,
+          localUpdatedAt,
+          remoteUpdatedAt: row.updatedAt,
+          remoteDeleted: true,
+        });
+
+        if (choice === "local") {
+          localWins.push(local);
+          continue;
+        }
+
+        if (choice === "skip") {
+          continue;
+        }
+      }
+
       map.delete(row.id);
       continue;
     }
 
     if (row.track) {
-      map.set(row.id, normalizeTrack(row.track));
+      const remote = normalizeTrack(row.track);
+      const localHash = await hashTrack(local ?? null);
+      const remoteHash = row.hash ?? await hashTrack(remote);
+
+      if (local && localHash && remoteHash && localHash !== remoteHash && onConflict) {
+        const choice = await onConflict({
+          trackId: row.id,
+          localTrack: local,
+          remoteTrack: remote,
+          localUpdatedAt,
+          remoteUpdatedAt: row.updatedAt,
+          remoteDeleted: false,
+        });
+
+        if (choice === "local") {
+          localWins.push(local);
+          continue;
+        }
+
+        if (choice === "skip") {
+          continue;
+        }
+      }
+
+      map.set(row.id, remote);
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  return {
+    tracks: Array.from(map.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
+    localWins,
+  };
 }
 
 function retryDelay(attempts: number) {
@@ -149,6 +245,7 @@ export function createCloudSync(options: {
   getTracks: () => Track[];
   setTracks: (tracks: Track[]) => void;
   setStatus: (status: SyncStatus) => void;
+  onConflict?: (conflict: SyncConflict) => Promise<SyncConflictChoice>;
 }) {
   let timer: number | null = null;
   let syncing = false;
@@ -223,6 +320,30 @@ export function createCloudSync(options: {
     void syncNow();
   };
 
+  const queueLocalWins = (tracks: Track[]) => {
+    if (tracks.length === 0) {
+      return;
+    }
+
+    const replaceIds = new Set(tracks.map((track) => track.id));
+    const outbox = getOutbox().filter((item) => !replaceIds.has(item.trackId));
+
+    for (const track of tracks) {
+      const normalized = normalizeTrack(track);
+      outbox.push({
+        opId: generateId(),
+        trackId: normalized.id,
+        type: "upsert",
+        updatedAt: normalized.updatedAt ?? now(),
+        track: normalized,
+        attempts: 0,
+        nextAttemptAt: 0,
+      });
+    }
+
+    setOutbox(outbox);
+  };
+
   const queueDelete = (trackId: string, updatedAt = now()) => {
     const outbox = getOutbox().filter((item) => item.trackId !== trackId);
     outbox.push({
@@ -295,7 +416,7 @@ export function createCloudSync(options: {
       const shouldPull = due.length > 0 || syncStartedAt - lastSyncAt >= STALE_PULL_MS;
 
       if (shouldPull) {
-        const pullResponse = await fetch(`/api/tracks?since=${lastSyncAt}`, {
+        const pullResponse = await fetch("/api/tracks", {
           headers: {
             Authorization: `Bearer ${authToken}`,
           },
@@ -309,9 +430,10 @@ export function createCloudSync(options: {
           serverTime?: number;
         };
 
-        const merged = mergeTracks(options.getTracks(), pullPayload.tracks ?? []);
-        options.setTracks(merged);
-        localStorage.setItem(TRACKS_KEY, JSON.stringify(merged));
+        const merged = await mergeTracks(options.getTracks(), pullPayload.tracks ?? [], options.onConflict);
+        queueLocalWins(merged.localWins);
+        options.setTracks(merged.tracks);
+        localStorage.setItem(TRACKS_KEY, JSON.stringify(merged.tracks));
 
         const syncedAt = pullPayload.serverTime ?? now();
         setLastSyncAt(syncedAt);

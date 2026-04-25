@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS tracks (
   user_id TEXT NOT NULL,
   track_id TEXT NOT NULL,
-  data TEXT,
+  data BLOB,
+  data_hash TEXT,
   updated_at INTEGER NOT NULL,
   deleted INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, track_id),

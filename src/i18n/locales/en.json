@@ -101,6 +101,13 @@
     "deleteTrack": {
       "title": "Confirm Delete",
       "description": "This track and its lap history will be removed."
+    },
+    "syncConflict": {
+      "title": "Cloud Sync Conflict",
+      "description": "The local and cloud versions of this track differ. Choose which one to keep.",
+      "keepLocal": "Keep Local and Overwrite Cloud",
+      "useCloud": "Use Cloud Version",
+      "acceptDelete": "Accept Cloud Delete"
     }
   },
   "dashboard": {
