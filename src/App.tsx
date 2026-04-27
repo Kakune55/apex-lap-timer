@@ -2,12 +2,14 @@ import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo, type
 import { Track } from './types';
 import { TrackList } from './components/TrackList';
 import { useGPS, getGPSRefreshRateHz, setGPSRefreshRateHz, isGPSRefreshRateSupported } from './hooks/useGPS';
-import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X, LogOut, Download } from 'lucide-react';
+import { Bug, Plus, Minus, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2, Settings, X, LogOut, Download, Upload } from 'lucide-react';
 import { createCloudSync, SyncConflict, SyncConflictChoice, SyncStatus } from './sync/cloudSync';
 import { AuthError, getCurrentUser, login, logout, SessionUser } from './sync/auth';
 import { Locale, useI18n } from './i18n';
 import { parseTrackShareInput } from './utils/trackShare';
 import { type AppRoute, useAppRoute } from './navigation/appRouter';
+import { loadStoredTracks, saveStoredTracks } from './storage/trackStore';
+import { formatTime } from './utils/geo';
 
 const WAKE_LOCK_STORAGE_KEY = 'apex_keep_screen_awake';
 type WakeLockErrorKey = 'unsupported' | 'failed';
@@ -122,7 +124,7 @@ function ViewFallback({ label }: { label: string }) {
 }
 
 export default function App() {
-    const { locale, setLocale, t } = useI18n();
+    const { locale, setLocale, t, formatDateTime } = useI18n();
     const { route, navigate, replace } = useAppRoute();
     const [tracks, setTracks] = useState<Track[]>([]);
     const [tracksReady, setTracksReady] = useState(false);
@@ -166,6 +168,7 @@ export default function App() {
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [importBusy, setImportBusy] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
+    const [forceSyncBusy, setForceSyncBusy] = useState<'upload' | 'download' | null>(null);
     const [pendingSyncConflict, setPendingSyncConflict] = useState<SyncConflict | null>(null);
     const syncConflictResolverRef = useRef<((choice: SyncConflictChoice) => void) | null>(null);
 
@@ -181,7 +184,9 @@ export default function App() {
         const normalized = normalizeTracks(nextTracks);
         tracksRef.current = normalized;
         setTracks(normalized);
-        localStorage.setItem('apex_tracks', JSON.stringify(normalized));
+        void saveStoredTracks(normalized).catch((error) => {
+            console.error('Failed to persist tracks', error);
+        });
     }, [normalizeTracks]);
 
     const handleSyncConflict = useCallback((conflict: SyncConflict) => {
@@ -197,6 +202,20 @@ export default function App() {
         setPendingSyncConflict(null);
     };
 
+    const formatConflictTrackSummary = (track: Track | null, updatedAt: number) => {
+        if (!track) {
+            return t('app.syncConflict.deleted');
+        }
+
+        const laps = track.laps?.length ?? track.history?.length ?? 0;
+        return t('app.syncConflict.summary', {
+            updatedAt: updatedAt ? formatDateTime(updatedAt) : t('app.sync.relative.never'),
+            laps,
+            best: formatTime(track.bestTime),
+            distance: (track.totalDistance / 1000).toFixed(2),
+        });
+    };
+
     const routeTrackId =
         route.name === 'track-details' || route.name === 'track-race'
             ? route.trackId
@@ -210,26 +229,23 @@ export default function App() {
     }, [routeTrackId, tracks]);
 
     useEffect(() => {
-        const saved = localStorage.getItem('apex_tracks');
-        if (saved) {
-            try {
-                persistTracks(JSON.parse(saved));
-            } catch (e) {
-                console.error('Failed to parse tracks', e);
-            }
-        }
-        setTracksReady(true);
-
         let disposed = false;
         void (async () => {
             try {
+                const storedTracks = await loadStoredTracks();
+                if (!disposed) {
+                    persistTracks(storedTracks);
+                    setTracksReady(true);
+                }
+
                 const user = await getCurrentUser();
                 if (!disposed) {
                     setAuthUser(user);
                 }
             } catch (e) {
                 if (!disposed) {
-                    console.error('Failed to restore auth session', e);
+                    console.error('Failed to initialize app data', e);
+                    setTracksReady(true);
                 }
             } finally {
                 if (!disposed) {
@@ -576,6 +592,36 @@ export default function App() {
         navigate({ name: 'admin' });
     };
 
+    const handleForceUploadLocal = async () => {
+        if (!syncRef.current || forceSyncBusy) {
+            return;
+        }
+        if (!window.confirm(t('app.settings.syncTools.confirmUpload'))) {
+            return;
+        }
+        setForceSyncBusy('upload');
+        try {
+            await syncRef.current.forceUploadLocal();
+        } finally {
+            setForceSyncBusy(null);
+        }
+    };
+
+    const handleForceDownloadCloud = async () => {
+        if (!syncRef.current || forceSyncBusy) {
+            return;
+        }
+        if (!window.confirm(t('app.settings.syncTools.confirmDownload'))) {
+            return;
+        }
+        setForceSyncBusy('download');
+        try {
+            await syncRef.current.forceDownloadCloud();
+        } finally {
+            setForceSyncBusy(null);
+        }
+    };
+
     const gpsRateSupported = isGPSRefreshRateSupported();
 
     const handleLogin = async (e: FormEvent) => {
@@ -844,6 +890,33 @@ export default function App() {
                             </div>
 
                             <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.syncTools.title')}</div>
+                                <p className="text-[10px] text-text-secondary">{t('app.settings.syncTools.description')}</p>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button
+                                        onClick={handleForceUploadLocal}
+                                        disabled={forceSyncBusy !== null}
+                                        className="w-full rounded-xl bg-accent-green px-4 py-3 text-sm font-bold text-black transition-colors hover:brightness-110 disabled:opacity-50"
+                                    >
+                                        <span className="inline-flex items-center gap-2">
+                                            <Upload size={16} />
+                                            {forceSyncBusy === 'upload' ? t('app.settings.syncTools.running') : t('app.settings.syncTools.uploadLocal')}
+                                        </span>
+                                    </button>
+                                    <button
+                                        onClick={handleForceDownloadCloud}
+                                        disabled={forceSyncBusy !== null}
+                                        className="w-full rounded-xl bg-white/10 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/15 disabled:opacity-50"
+                                    >
+                                        <span className="inline-flex items-center gap-2">
+                                            <Download size={16} />
+                                            {forceSyncBusy === 'download' ? t('app.settings.syncTools.running') : t('app.settings.syncTools.downloadCloud')}
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="apex-panel-muted rounded-2xl p-4 space-y-3">
                                 <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{t('app.settings.language')}</div>
                                 <div className="grid grid-cols-2 gap-2">
                                     {(['en', 'zh-CN'] as Locale[]).map((language) => (
@@ -934,6 +1007,16 @@ export default function App() {
                             {pendingSyncConflict.localTrack?.name || pendingSyncConflict.remoteTrack?.name || pendingSyncConflict.trackId}
                         </div>
                         <p className="text-sm text-text-secondary mb-5">{t('app.syncConflict.description')}</p>
+                        <div className="mb-5 grid grid-cols-1 gap-2 text-xs">
+                            <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                                <div className="mb-1 font-bold uppercase tracking-widest text-text-secondary">{t('app.syncConflict.local')}</div>
+                                <div className="text-white/85">{formatConflictTrackSummary(pendingSyncConflict.localTrack, pendingSyncConflict.localUpdatedAt)}</div>
+                            </div>
+                            <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                                <div className="mb-1 font-bold uppercase tracking-widest text-text-secondary">{t('app.syncConflict.cloud')}</div>
+                                <div className="text-white/85">{formatConflictTrackSummary(pendingSyncConflict.remoteTrack, pendingSyncConflict.remoteUpdatedAt)}</div>
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 gap-3">
                             <button
                                 onClick={() => resolveSyncConflict('local')}

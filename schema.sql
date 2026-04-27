@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS tracks (
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS track_laps (
+  user_id TEXT NOT NULL,
+  track_id TEXT NOT NULL,
+  lap_id TEXT NOT NULL,
+  data BLOB NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, track_id, lap_id),
+  FOREIGN KEY (user_id, track_id) REFERENCES tracks(user_id, track_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -38,6 +48,9 @@ ON users(updated_at);
 
 CREATE INDEX IF NOT EXISTS idx_tracks_user_updated_at
 ON tracks(user_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_track_laps_track
+ON track_laps(user_id, track_id);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user
 ON sessions(user_id, expires_at);

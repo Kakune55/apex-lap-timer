@@ -43,11 +43,15 @@ const USERS_TABLE_SQL =
   "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, display_name TEXT, auth_provider TEXT NOT NULL DEFAULT 'local', password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL DEFAULT 100000, is_active INTEGER NOT NULL DEFAULT 1, dashboard_access INTEGER NOT NULL DEFAULT 0, is_admin INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)";
 const TRACKS_TABLE_SQL =
   "CREATE TABLE IF NOT EXISTS tracks (user_id TEXT NOT NULL, track_id TEXT NOT NULL, data BLOB, data_hash TEXT, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, track_id), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)";
+const TRACK_LAPS_TABLE_SQL =
+  "CREATE TABLE IF NOT EXISTS track_laps (user_id TEXT NOT NULL, track_id TEXT NOT NULL, lap_id TEXT NOT NULL, data BLOB NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, track_id, lap_id), FOREIGN KEY (user_id, track_id) REFERENCES tracks(user_id, track_id) ON DELETE CASCADE)";
 const SESSIONS_TABLE_SQL =
   "CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)";
 const USERS_UPDATED_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at)";
 const TRACKS_USER_UPDATED_INDEX_SQL =
   "CREATE INDEX IF NOT EXISTS idx_tracks_user_updated_at ON tracks(user_id, updated_at)";
+const TRACK_LAPS_TRACK_INDEX_SQL =
+  "CREATE INDEX IF NOT EXISTS idx_track_laps_track ON track_laps(user_id, track_id)";
 const SESSIONS_USER_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, expires_at)";
 const SESSIONS_EXPIRES_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)";
 
@@ -203,6 +207,48 @@ async function encodeTrackData(track: unknown): Promise<ArrayBuffer> {
   return toArrayBuffer(compressed ?? rawBytes);
 }
 
+function stripTrackRecords(track: unknown): unknown {
+  if (!track || typeof track !== "object" || Array.isArray(track)) {
+    return track;
+  }
+
+  const { laps, history, ...baseTrack } = track as Record<string, unknown>;
+  return baseTrack;
+}
+
+function getTrackLaps(track: unknown): Record<string, unknown>[] {
+  if (!track || typeof track !== "object" || Array.isArray(track)) {
+    return [];
+  }
+
+  const laps = (track as Record<string, unknown>).laps;
+  return Array.isArray(laps) ? laps.filter((lap): lap is Record<string, unknown> => isLap(lap)) : [];
+}
+
+async function decodeStoredTrack(db: D1Database, userId: string, row: Record<string, unknown>): Promise<unknown> {
+  const track = await decodeTrackData(row.data);
+  if (!track || typeof track !== "object" || Array.isArray(track)) {
+    return track;
+  }
+
+  const storedLaps = await db
+    .prepare("SELECT data FROM track_laps WHERE user_id = ? AND track_id = ? ORDER BY updated_at ASC")
+    .bind(userId, String(row.track_id))
+    .all<Record<string, unknown>>();
+
+  if (!storedLaps.results || storedLaps.results.length === 0) {
+    return track;
+  }
+
+  const laps = await Promise.all(storedLaps.results.map((lapRow) => decodeTrackData(lapRow.data)));
+  const validLaps = laps.filter(isLap);
+  return {
+    ...(track as Record<string, unknown>),
+    laps: validLaps,
+    history: validLaps.map((lap) => (lap as Record<string, unknown>).time),
+  };
+}
+
 function stableJson(value: unknown): string {
   if (typeof value === "undefined") {
     return "null";
@@ -275,6 +321,80 @@ async function verifyPassword(
 
 function booleanFlag(value: unknown): number {
   return value ? 1 : 0;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isTrackPoint(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const point = value as Record<string, unknown>;
+  return (
+    isFiniteNumber(point.lat) &&
+    isFiniteNumber(point.lon) &&
+    isFiniteNumber(point.timeOffset) &&
+    isFiniteNumber(point.distance) &&
+    (typeof point.delta === "undefined" || isFiniteNumber(point.delta)) &&
+    (typeof point.speed === "undefined" || isFiniteNumber(point.speed))
+  );
+}
+
+function isGate(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const gate = value as Record<string, unknown>;
+  return (
+    isFiniteNumber(gate.lat) &&
+    isFiniteNumber(gate.lon) &&
+    isFiniteNumber(gate.heading) &&
+    isFiniteNumber(gate.width) &&
+    (typeof gate.name === "undefined" || typeof gate.name === "string")
+  );
+}
+
+function isLap(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const lap = value as Record<string, unknown>;
+  return (
+    typeof lap.id === "string" &&
+    isFiniteNumber(lap.time) &&
+    Array.isArray(lap.points) &&
+    lap.points.every(isTrackPoint) &&
+    isFiniteNumber(lap.date)
+  );
+}
+
+function isValidTrack(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const track = value as Record<string, unknown>;
+  return (
+    typeof track.id === "string" &&
+    typeof track.name === "string" &&
+    (track.type === "circuit" || track.type === "sprint") &&
+    isGate(track.startGate) &&
+    isGate(track.finishGate) &&
+    Array.isArray(track.points) &&
+    track.points.every(isTrackPoint) &&
+    isFiniteNumber(track.totalDistance) &&
+    isFiniteNumber(track.bestTime) &&
+    (typeof track.updatedAt === "undefined" || isFiniteNumber(track.updatedAt)) &&
+    (typeof track.autoUpdateRecord === "undefined" || typeof track.autoUpdateRecord === "boolean") &&
+    (typeof track.sectors === "undefined" || (Array.isArray(track.sectors) && track.sectors.every(isGate))) &&
+    (typeof track.history === "undefined" || (Array.isArray(track.history) && track.history.every(isFiniteNumber))) &&
+    (typeof track.laps === "undefined" || (Array.isArray(track.laps) && track.laps.every(isLap)))
+  );
 }
 
 function sanitizedDisplayName(userId: string, displayName: string | null): string {
@@ -401,8 +521,10 @@ async function ensureDb(c: AppContext) {
   await db.prepare(USERS_TABLE_SQL).run();
   await db.prepare(SESSIONS_TABLE_SQL).run();
   await ensureTracksTable(db);
+  await db.prepare(TRACK_LAPS_TABLE_SQL).run();
   await db.prepare(USERS_UPDATED_INDEX_SQL).run();
   await db.prepare(TRACKS_USER_UPDATED_INDEX_SQL).run();
+  await db.prepare(TRACK_LAPS_TRACK_INDEX_SQL).run();
   await db.prepare(SESSIONS_USER_INDEX_SQL).run();
   await db.prepare(SESSIONS_EXPIRES_INDEX_SQL).run();
 
@@ -806,6 +928,122 @@ app.delete("/api/admin/users/:userId", async (c) => {
   return c.json({ ok: true });
 });
 
+app.get("/api/tracks/manifest", async (c) => {
+  const dbOrResponse = await ensureDb(c);
+  if (dbOrResponse instanceof Response) {
+    return dbOrResponse;
+  }
+
+  const userIdOrResponse = authUserIdOr401(c);
+  if (userIdOrResponse instanceof Response) {
+    return userIdOrResponse;
+  }
+
+  const result = await dbOrResponse
+    .prepare(
+      "SELECT track_id, data_hash, updated_at, deleted FROM tracks WHERE user_id = ? ORDER BY updated_at ASC",
+    )
+    .bind(userIdOrResponse)
+    .all<Record<string, unknown>>();
+
+  return c.json({
+    ok: true,
+    serverTime: Date.now(),
+    tracks: (result.results ?? []).map((row) => ({
+      id: String(row.track_id),
+      updatedAt: Number(row.updated_at),
+      deleted: Number(row.deleted ?? 0) === 1,
+      hash: typeof row.data_hash === "string" ? row.data_hash : null,
+    })),
+  });
+});
+
+app.get("/api/tracks/:trackId", async (c) => {
+  const dbOrResponse = await ensureDb(c);
+  if (dbOrResponse instanceof Response) {
+    return dbOrResponse;
+  }
+
+  const userIdOrResponse = authUserIdOr401(c);
+  if (userIdOrResponse instanceof Response) {
+    return userIdOrResponse;
+  }
+
+  const trackId = c.req.param("trackId");
+  if (!trackId) {
+    return c.json({ ok: false, error: "Track id is required" }, 400);
+  }
+
+  const row = await dbOrResponse
+    .prepare("SELECT track_id, data, data_hash, updated_at, deleted FROM tracks WHERE user_id = ? AND track_id = ?")
+    .bind(userIdOrResponse, trackId)
+    .first<Record<string, unknown>>();
+
+  if (!row) {
+    return c.json({ ok: false, error: "Track not found" }, 404);
+  }
+
+  const deleted = Number(row.deleted ?? 0) === 1;
+  return c.json({
+    ok: true,
+    serverTime: Date.now(),
+    track: {
+      id: String(row.track_id),
+      updatedAt: Number(row.updated_at),
+      deleted,
+      hash: typeof row.data_hash === "string" ? row.data_hash : null,
+      track: deleted ? null : await decodeStoredTrack(dbOrResponse, userIdOrResponse, row),
+    },
+  });
+});
+
+app.post("/api/tracks/batch", async (c) => {
+  const dbOrResponse = await ensureDb(c);
+  if (dbOrResponse instanceof Response) {
+    return dbOrResponse;
+  }
+
+  const userIdOrResponse = authUserIdOr401(c);
+  if (userIdOrResponse instanceof Response) {
+    return userIdOrResponse;
+  }
+
+  const body = await c.req.json<{ ids?: unknown[] }>().catch(() => ({}));
+  const ids = Array.from(new Set((Array.isArray(body.ids) ? body.ids : [])
+    .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    .map((id) => id.trim())
+    .slice(0, 100)));
+
+  if (ids.length === 0) {
+    return c.json({ ok: true, serverTime: Date.now(), tracks: [] });
+  }
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const result = await dbOrResponse
+    .prepare(
+      `SELECT track_id, data, data_hash, updated_at, deleted FROM tracks WHERE user_id = ? AND track_id IN (${placeholders})`,
+    )
+    .bind(userIdOrResponse, ...ids)
+    .all<Record<string, unknown>>();
+
+  const tracks = await Promise.all((result.results ?? []).map(async (row) => {
+    const deleted = Number(row.deleted ?? 0) === 1;
+    return {
+      id: String(row.track_id),
+      updatedAt: Number(row.updated_at),
+      deleted,
+      hash: typeof row.data_hash === "string" ? row.data_hash : null,
+      track: deleted ? null : await decodeStoredTrack(dbOrResponse, userIdOrResponse, row),
+    };
+  }));
+
+  return c.json({
+    ok: true,
+    serverTime: Date.now(),
+    tracks,
+  });
+});
+
 app.get("/api/tracks", async (c) => {
   const dbOrResponse = await ensureDb(c);
   if (dbOrResponse instanceof Response) {
@@ -842,7 +1080,7 @@ app.get("/api/tracks", async (c) => {
       updatedAt: Number(row.updated_at),
       deleted,
       hash: typeof row.data_hash === "string" ? row.data_hash : null,
-      track: deleted ? null : await decodeTrackData(row.data),
+      track: deleted ? null : await decodeStoredTrack(db, userId, row),
     };
   }));
 
@@ -900,11 +1138,16 @@ app.post("/api/sync", async (c) => {
         )
         .bind(userId, op.trackId, op.updatedAt)
         .run();
+      await db.prepare("DELETE FROM track_laps WHERE user_id = ? AND track_id = ?").bind(userId, op.trackId).run();
       ackOperationIds.push(op.opId);
       continue;
     }
 
-    const encodedTrackData = await encodeTrackData(op.track);
+    if (!isValidTrack(op.track) || (op.track as { id: string }).id !== op.trackId) {
+      continue;
+    }
+
+    const encodedTrackData = await encodeTrackData(stripTrackRecords(op.track));
     const trackHash = await hashTrackData(op.track);
 
     await db
@@ -913,6 +1156,16 @@ app.post("/api/sync", async (c) => {
       )
       .bind(userId, op.trackId, encodedTrackData, trackHash, op.updatedAt)
       .run();
+
+    await db.prepare("DELETE FROM track_laps WHERE user_id = ? AND track_id = ?").bind(userId, op.trackId).run();
+    const insertLap = db.prepare(
+      "INSERT INTO track_laps (user_id, track_id, lap_id, data, updated_at) VALUES (?, ?, ?, ?, ?)",
+    );
+    for (const lap of getTrackLaps(op.track)) {
+      await insertLap
+        .bind(userId, op.trackId, String(lap.id), await encodeTrackData(lap), Number(lap.date ?? op.updatedAt))
+        .run();
+    }
     ackOperationIds.push(op.opId);
   }
 

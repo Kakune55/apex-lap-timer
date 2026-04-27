@@ -1,6 +1,5 @@
 import { Track } from "../types";
 
-const TRACKS_KEY = "apex_tracks";
 const OUTBOX_KEY = "apex_sync_outbox";
 const DEVICE_ID_KEY = "apex_device_id";
 const LAST_SYNC_KEY = "apex_last_sync_at";
@@ -31,16 +30,20 @@ type OutboxItem = {
   trackId: string;
   type: "upsert" | "delete";
   updatedAt: number;
+  // Kept only for migration from older outbox entries; new entries store ids only.
   track?: Track;
   attempts: number;
   nextAttemptAt: number;
 };
 
-type RemoteTrackRecord = {
+type RemoteTrackManifestRecord = {
   id: string;
   updatedAt: number;
   deleted: boolean;
   hash?: string | null;
+};
+
+type RemoteTrackRecord = RemoteTrackManifestRecord & {
   track: Track | null;
 };
 
@@ -160,18 +163,51 @@ export function getAuthToken(): string | null {
 
 async function mergeTracks(
   localTracks: Track[],
-  remoteTracks: RemoteTrackRecord[],
+  remoteManifest: RemoteTrackManifestRecord[],
+  fetchRemoteTracks: (trackIds: string[]) => Promise<Map<string, RemoteTrackRecord>>,
   onConflict?: (conflict: SyncConflict) => Promise<SyncConflictChoice>,
 ): Promise<{ tracks: Track[]; localWins: Track[] }> {
   const map = new Map<string, Track>();
   const localWins: Track[] = [];
+  const remoteIds = new Set(remoteManifest.map((row) => row.id));
+  const neededRemoteIds: string[] = [];
 
   for (const localTrack of localTracks) {
     const normalized = normalizeTrack(localTrack);
     map.set(normalized.id, normalized);
   }
 
-  for (const row of remoteTracks) {
+  for (const localTrack of map.values()) {
+    if (!remoteIds.has(localTrack.id)) {
+      const localWinner = {
+        ...localTrack,
+        updatedAt: now(),
+      };
+      localWins.push(localWinner);
+      map.set(localTrack.id, localWinner);
+    }
+  }
+
+  for (const row of remoteManifest) {
+    const local = map.get(row.id);
+    if (row.deleted) {
+      continue;
+    }
+
+    if (!local) {
+      neededRemoteIds.push(row.id);
+      continue;
+    }
+
+    const localHash = await hashTrack(local);
+    if (!localHash || !row.hash || localHash !== row.hash) {
+      neededRemoteIds.push(row.id);
+    }
+  }
+
+  const remoteDetails = await fetchRemoteTracks(Array.from(new Set(neededRemoteIds)));
+
+  for (const row of remoteManifest) {
     const local = map.get(row.id);
     const localUpdatedAt = local?.updatedAt ?? 0;
 
@@ -187,7 +223,12 @@ async function mergeTracks(
         });
 
         if (choice === "local") {
-          localWins.push(local);
+          const localWinner = {
+            ...local,
+            updatedAt: now(),
+          };
+          localWins.push(localWinner);
+          map.set(row.id, localWinner);
           continue;
         }
 
@@ -200,33 +241,53 @@ async function mergeTracks(
       continue;
     }
 
-    if (row.track) {
-      const remote = normalizeTrack(row.track);
-      const localHash = await hashTrack(local ?? null);
-      const remoteHash = row.hash ?? await hashTrack(remote);
+    if (!local) {
+      const remoteRow = remoteDetails.get(row.id);
+      if (remoteRow?.track) {
+        map.set(row.id, normalizeTrack(remoteRow.track));
+      }
+      continue;
+    }
 
-      if (local && localHash && remoteHash && localHash !== remoteHash && onConflict) {
-        const choice = await onConflict({
-          trackId: row.id,
-          localTrack: local,
-          remoteTrack: remote,
-          localUpdatedAt,
-          remoteUpdatedAt: row.updatedAt,
-          remoteDeleted: false,
-        });
+    const localHash = await hashTrack(local);
+    const remoteHash = row.hash;
 
-        if (choice === "local") {
-          localWins.push(local);
-          continue;
-        }
+    if (localHash && remoteHash && localHash === remoteHash) {
+      continue;
+    }
 
-        if (choice === "skip") {
-          continue;
-        }
+    const remoteRow = remoteDetails.get(row.id);
+    if (!remoteRow?.track) {
+      continue;
+    }
+
+    const remote = normalizeTrack(remoteRow.track);
+    if (onConflict) {
+      const choice = await onConflict({
+        trackId: row.id,
+        localTrack: local,
+        remoteTrack: remote,
+        localUpdatedAt,
+        remoteUpdatedAt: row.updatedAt,
+        remoteDeleted: false,
+      });
+
+      if (choice === "local") {
+        const localWinner = {
+          ...local,
+          updatedAt: now(),
+        };
+        localWins.push(localWinner);
+        map.set(row.id, localWinner);
+        continue;
       }
 
-      map.set(row.id, remote);
+      if (choice === "skip") {
+        continue;
+      }
     }
+
+    map.set(row.id, remote);
   }
 
   return {
@@ -311,7 +372,6 @@ export function createCloudSync(options: {
       trackId: normalized.id,
       type: "upsert",
       updatedAt: normalized.updatedAt ?? now(),
-      track: normalized,
       attempts: 0,
       nextAttemptAt: 0,
     });
@@ -335,7 +395,6 @@ export function createCloudSync(options: {
         trackId: normalized.id,
         type: "upsert",
         updatedAt: normalized.updatedAt ?? now(),
-        track: normalized,
         attempts: 0,
         nextAttemptAt: 0,
       });
@@ -359,6 +418,105 @@ export function createCloudSync(options: {
     void syncNow();
   };
 
+  const forceUploadLocal = async () => {
+    if (!navigator.onLine) {
+      emitStatus({ state: "offline" });
+      return;
+    }
+
+    const authToken = getAuthToken();
+    if (!authToken) {
+      emitStatus({ state: "error", error: "not authenticated" });
+      return;
+    }
+
+    const localTracks = options.getTracks().map((track) => ({
+      ...track,
+      updatedAt: now(),
+    }));
+    const localIds = new Set(localTracks.map((track) => track.id));
+
+    const manifestResponse = await fetch("/api/tracks/manifest", {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    if (!manifestResponse.ok) {
+      throw new Error(`sync manifest failed: ${manifestResponse.status}`);
+    }
+    const manifestPayload = (await manifestResponse.json()) as { tracks?: RemoteTrackManifestRecord[] };
+    const deleteOps = (manifestPayload.tracks ?? [])
+      .filter((row) => !row.deleted && !localIds.has(row.id))
+      .map((row): OutboxItem => ({
+        opId: generateId(),
+        trackId: row.id,
+        type: "delete",
+        updatedAt: now(),
+        attempts: 0,
+        nextAttemptAt: 0,
+      }));
+
+    queueLocalWins(localTracks);
+    if (deleteOps.length > 0) {
+      setOutbox([...getOutbox(), ...deleteOps]);
+    }
+    emitStatus({ state: navigator.onLine ? "idle" : "offline" });
+    await syncNow();
+  };
+
+  const forceDownloadCloud = async () => {
+    if (syncing) {
+      return;
+    }
+
+    if (!navigator.onLine) {
+      emitStatus({ state: "offline" });
+      return;
+    }
+
+    const authToken = getAuthToken();
+    if (!authToken) {
+      emitStatus({ state: "error", error: "not authenticated" });
+      return;
+    }
+
+    syncing = true;
+    emitStatus({ state: "syncing", error: null });
+
+    try {
+      const response = await fetch("/api/tracks", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`sync force pull failed: ${response.status}`);
+      }
+
+      const payload = (await response.json()) as {
+        tracks?: RemoteTrackRecord[];
+        serverTime?: number;
+      };
+      const cloudTracks = (payload.tracks ?? [])
+        .filter((row) => !row.deleted && row.track)
+        .map((row) => normalizeTrack(row.track as Track))
+        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+
+      setOutbox([]);
+      options.setTracks(cloudTracks);
+      const syncedAt = payload.serverTime ?? now();
+      setLastSyncAt(syncedAt);
+      emitStatus({ state: "idle", pending: 0, lastSyncAt: syncedAt });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "sync force pull failed";
+      emitStatus({ state: "error", error: message });
+    } finally {
+      syncing = false;
+      scheduleNextSync();
+    }
+  };
+
   const syncNow = async () => {
     if (syncing) {
       return;
@@ -380,11 +538,38 @@ export function createCloudSync(options: {
         return;
       }
 
-      const syncStartedAt = now();
       const before = getOutbox();
       const due = before.filter((item) => item.nextAttemptAt <= now());
 
       if (due.length > 0) {
+        const localTracksById = new Map(options.getTracks().map((track) => [track.id, normalizeTrack(track)]));
+        const locallyResolvedOperationIds = new Set<string>();
+        const operations = due.flatMap((item) => {
+          if (item.type === "delete") {
+            return [{
+              opId: item.opId,
+              trackId: item.trackId,
+              type: item.type,
+              updatedAt: item.updatedAt,
+            }];
+          }
+
+          const track = localTracksById.get(item.trackId) ?? item.track;
+          if (!track) {
+            locallyResolvedOperationIds.add(item.opId);
+            return [];
+          }
+
+          const normalized = normalizeTrack(track);
+          return [{
+            opId: item.opId,
+            trackId: item.trackId,
+            type: item.type,
+            updatedAt: Math.max(item.updatedAt, normalized.updatedAt ?? 0),
+            track: normalized,
+          }];
+        });
+
         const response = await fetch("/api/sync", {
           method: "POST",
           headers: {
@@ -393,13 +578,7 @@ export function createCloudSync(options: {
           },
           body: JSON.stringify({
             deviceId: getDeviceId(),
-            operations: due.map((item) => ({
-              opId: item.opId,
-              trackId: item.trackId,
-              type: item.type,
-              updatedAt: item.updatedAt,
-              track: item.track,
-            })),
+            operations,
           }),
         });
 
@@ -409,14 +588,14 @@ export function createCloudSync(options: {
 
         const payload = (await response.json()) as { ackOperationIds?: string[] };
         const ackSet = new Set(payload.ackOperationIds ?? []);
+        for (const opId of locallyResolvedOperationIds) {
+          ackSet.add(opId);
+        }
         setOutbox(before.filter((item) => !ackSet.has(item.opId)));
       }
 
-      const lastSyncAt = getLastSyncAt();
-      const shouldPull = due.length > 0 || syncStartedAt - lastSyncAt >= STALE_PULL_MS;
-
-      if (shouldPull) {
-        const pullResponse = await fetch("/api/tracks", {
+      {
+        const pullResponse = await fetch("/api/tracks/manifest", {
           headers: {
             Authorization: `Bearer ${authToken}`,
           },
@@ -426,20 +605,44 @@ export function createCloudSync(options: {
         }
 
         const pullPayload = (await pullResponse.json()) as {
-          tracks?: RemoteTrackRecord[];
+          tracks?: RemoteTrackManifestRecord[];
           serverTime?: number;
         };
 
-        const merged = await mergeTracks(options.getTracks(), pullPayload.tracks ?? [], options.onConflict);
+        const fetchRemoteTracks = async (trackIds: string[]): Promise<Map<string, RemoteTrackRecord>> => {
+          if (trackIds.length === 0) {
+            return new Map();
+          }
+
+          const detailResponse = await fetch("/api/tracks/batch", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ ids: trackIds }),
+          });
+
+          if (!detailResponse.ok) {
+            throw new Error(`sync detail failed: ${detailResponse.status}`);
+          }
+
+          const detailPayload = (await detailResponse.json()) as { tracks?: RemoteTrackRecord[] };
+          return new Map((detailPayload.tracks ?? []).map((track) => [track.id, track]));
+        };
+
+        const merged = await mergeTracks(
+          options.getTracks(),
+          pullPayload.tracks ?? [],
+          fetchRemoteTracks,
+          options.onConflict,
+        );
         queueLocalWins(merged.localWins);
         options.setTracks(merged.tracks);
-        localStorage.setItem(TRACKS_KEY, JSON.stringify(merged.tracks));
 
         const syncedAt = pullPayload.serverTime ?? now();
         setLastSyncAt(syncedAt);
         emitStatus({ state: "idle", lastSyncAt: syncedAt });
-      } else {
-        emitStatus({ state: "idle", lastSyncAt: lastSyncAt || null });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "sync failed";
@@ -505,6 +708,8 @@ export function createCloudSync(options: {
     syncNow,
     queueUpsert,
     queueDelete,
+    forceUploadLocal,
+    forceDownloadCloud,
   };
 }
 

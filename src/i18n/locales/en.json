@@ -85,6 +85,15 @@
         "description": "Import a shared track from a friend. Export still starts from the track details page.",
         "import": "Import Shared Track"
       },
+      "syncTools": {
+        "title": "Sync Tools",
+        "description": "Manually choose sync direction after a reset, device change, or migration.",
+        "uploadLocal": "Overwrite Cloud with Local",
+        "downloadCloud": "Overwrite Local with Cloud",
+        "running": "Syncing...",
+        "confirmUpload": "Overwrite cloud tracks with all local tracks?",
+        "confirmDownload": "Overwrite local tracks with cloud data? Local unsynced changes will be lost."
+      },
       "language": "Language",
       "debugTools": "Debug Tools",
       "toggleDebugTools": "Toggle debug tools",
@@ -105,6 +114,10 @@
     "syncConflict": {
       "title": "Cloud Sync Conflict",
       "description": "The local and cloud versions of this track differ. Choose which one to keep.",
+      "local": "Local",
+      "cloud": "Cloud",
+      "deleted": "Deleted",
+      "summary": "Updated: {{updatedAt}} · Laps: {{laps}} · Best: {{best}} · Distance: {{distance}} km",
       "keepLocal": "Keep Local and Overwrite Cloud",
       "useCloud": "Use Cloud Version",
       "acceptDelete": "Accept Cloud Delete"

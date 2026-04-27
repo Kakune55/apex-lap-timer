@@ -85,6 +85,15 @@
         "description": "从好友分享文本中导入赛道。导出分享仍在赛道详情页发起。",
         "import": "导入分享赛道"
       },
+      "syncTools": {
+        "title": "同步工具",
+        "description": "用于清库、换设备或迁移后手动指定同步方向。",
+        "uploadLocal": "用本地覆盖云端",
+        "downloadCloud": "用云端覆盖本地",
+        "running": "正在同步...",
+        "confirmUpload": "确认用本地所有赛道覆盖云端吗？",
+        "confirmDownload": "确认用云端数据覆盖本地赛道吗？本地未上传改动会丢失。"
+      },
       "language": "语言",
       "debugTools": "调试工具",
       "toggleDebugTools": "切换调试工具",
@@ -105,6 +114,10 @@
     "syncConflict": {
       "title": "云同步冲突",
       "description": "本地和云端的赛道内容不一致，请选择保留哪一份。",
+      "local": "本地",
+      "cloud": "云端",
+      "deleted": "已删除",
+      "summary": "更新：{{updatedAt}} · 圈数：{{laps}} · 最佳：{{best}} · 距离：{{distance}} km",
       "keepLocal": "保留本地并覆盖云端",
       "useCloud": "使用云端版本",
       "acceptDelete": "接受云端删除"
